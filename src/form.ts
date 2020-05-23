@@ -17,7 +17,6 @@ import {
   END,
   handleField,
   setUpParser,
-  lower,
 } from './utils';
 
 const START_BOUNDARY = 1;
@@ -299,7 +298,7 @@ export class Form extends Writable {
             break;
           }
 
-          cl = lower(c);
+          cl = this.lower(c);
           if (cl < A || cl > Z) {
             this.handleError(createError(400, 'Expected alphabetic character, received ' + c));
             return;
@@ -596,5 +595,9 @@ export class Form extends Writable {
       return String.fromCharCode(code);
     });
     return filename.substr(filename.lastIndexOf('\\') + 1);
+  }
+
+  protected lower(c: number) {
+    return c | 0x20;
   }
 }

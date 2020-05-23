@@ -198,10 +198,6 @@ export function setUpParser(self, boundary) {
   });
 }
 
-export function lower(c) {
-  return c | 0x20;
-}
-
 function maybeClose(self) {
   if (self.flushing > 0 || self.error) return;
 
