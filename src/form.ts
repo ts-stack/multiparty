@@ -528,7 +528,7 @@ export class Form extends Writable {
     if (this.destStream.filename == null && this.autoFields) {
       this.handleField(this.destStream);
     } else if (this.destStream.filename != null && this.autoFiles) {
-      this.handleFile(this, this.destStream);
+      this.handleFile(this.destStream);
     } else {
       this.handlePart(this.destStream);
     }
@@ -709,12 +709,12 @@ export class Form extends Writable {
     });
   }
 
-  protected handleFile(self, fileStream) {
-    if (self.error) return;
+  protected handleFile(fileStream) {
+    if (this.error) return;
     const publicFile = {
       fieldName: fileStream.name,
       originalFilename: fileStream.filename,
-      path: uploadPath(self.uploadDir, fileStream.filename),
+      path: uploadPath(this.uploadDir, fileStream.filename),
       headers: fileStream.headers,
       size: 0,
     };
@@ -723,37 +723,37 @@ export class Form extends Writable {
       ws: null,
     };
     this.beginFlush(); // flush to write stream
-    const emitAndReleaseHold = this.holdEmitQueue(self, fileStream);
+    const emitAndReleaseHold = this.holdEmitQueue(this, fileStream);
     fileStream.on('error', (err) => {
-      self.handleError(err);
+      this.handleError(err);
     });
     fs.open(publicFile.path, 'wx', (err, fd) => {
-      if (err) return self.handleError(err);
+      if (err) return this.handleError(err);
       const slicer = fdSlicer.createFromFd(fd, { autoClose: true });
 
       // end option here guarantees that no more than that amount will be written
       // or else an error will be emitted
-      internalFile.ws = slicer.createWriteStream({ end: self.maxFilesSize - self.totalFileSize });
+      internalFile.ws = slicer.createWriteStream({ end: this.maxFilesSize - this.totalFileSize });
 
       // if an error ocurred while we were waiting for fs.open we handle that
       // cleanup now
-      self.openedFiles.push(internalFile);
-      if (self.error) return this.cleanupOpenFiles();
+      this.openedFiles.push(internalFile);
+      if (this.error) return this.cleanupOpenFiles();
 
       let prevByteCount = 0;
       internalFile.ws.on('error', (err) => {
-        self.handleError(err.code === 'ETOOBIG' ? createError(413, err.message, { code: err.code }) : err);
+        this.handleError(err.code === 'ETOOBIG' ? createError(413, err.message, { code: err.code }) : err);
       });
       internalFile.ws.on('progress', () => {
         publicFile.size = internalFile.ws.bytesWritten;
         const delta = publicFile.size - prevByteCount;
-        self.totalFileSize += delta;
+        this.totalFileSize += delta;
         prevByteCount = publicFile.size;
       });
       slicer.on('close', () => {
-        if (self.error) return;
+        if (this.error) return;
         emitAndReleaseHold(() => {
-          self.emit('file', fileStream.name, publicFile);
+          this.emit('file', fileStream.name, publicFile);
         });
         this.endFlush();
       });
