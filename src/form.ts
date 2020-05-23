@@ -1,9 +1,9 @@
 import os = require('os');
-import stream = require('stream');
-import { Writable } from 'stream';
-import { IncomingMessage } from 'http';
-import { StringDecoder } from 'string_decoder';
 import createError = require('http-errors');
+import { PassThrough } from 'stream';
+import { Writable } from 'stream';
+import { IncomingMessage, IncomingHttpHeaders } from 'http';
+import { StringDecoder } from 'string_decoder';
 
 import { FormOptions, Fn, ObjectAny } from './types';
 import {
@@ -21,6 +21,14 @@ import {
   parseFilename,
   lower,
 } from './utils';
+
+export interface PassThroughExt extends PassThrough {
+  name: string;
+  headers: IncomingHttpHeaders;
+  filename: string;
+  byteOffset: number;
+  byteCount: number;
+}
 
 const START_BOUNDARY = 1;
 const HEADER_FIELD_START = 2;
@@ -70,6 +78,9 @@ export class Form extends Writable {
   protected backpressure: boolean = false;
   protected writeCbs: Fn[] = [];
   protected emitQueue: string[] = [];
+  protected req: IncomingMessage;
+  protected waitend: boolean = true;
+  protected destStream: PassThroughExt;
 
   constructor(options?: FormOptions) {
     super();
@@ -94,14 +105,14 @@ export class Form extends Writable {
   }
 
   parse(req: IncomingMessage, cb: Fn) {
-    const self = this;
+    this.req = req;
     let called = false;
-    let waitend = true;
+    const self = this;
 
     if (cb) {
       // if the user supplies a callback, this implies autoFields and autoFiles
-      self.autoFields = true;
-      self.autoFiles = true;
+      this.autoFields = true;
+      this.autoFiles = true;
 
       // wait for request to end before calling cb
       const end = (done: Fn) => {
@@ -111,7 +122,7 @@ export class Form extends Writable {
 
         // wait for req events to fire
         process.nextTick(() => {
-          if (waitend && req.readable) {
+          if (this.waitend && req.readable) {
             // dump rest of request
             req.resume();
             req.once('end', done);
@@ -124,35 +135,34 @@ export class Form extends Writable {
 
       const fields: ObjectAny = {};
       const files: ObjectAny = {};
-      self.on('error', (err) => {
+      this.on('error', (err) => {
         end(() => {
           cb(err);
         });
       });
-      self.on('field', (name, value) => {
+      this.on('field', (name, value) => {
         const fieldsArray = fields[name] || (fields[name] = []);
         fieldsArray.push(value);
       });
-      self.on('file', (name, file) => {
+      this.on('file', (name, file) => {
         const filesArray = files[name] || (files[name] = []);
         filesArray.push(file);
       });
-      self.on('close', () => {
+      this.on('close', () => {
         end(() => {
           cb(null, fields, files);
         });
       });
     }
 
-    self.handleError = handleError;
-    self.bytesExpected = getBytesExpected(req.headers);
+    this.bytesExpected = getBytesExpected(req.headers);
 
-    req.on('end', onReqEnd);
+    req.on('end', this.onReqEnd.bind(this));
     req.on('error', (err) => {
-      waitend = false;
-      handleError(err);
+      this.waitend = false;
+      this.handleError(err);
     });
-    req.on('aborted', onReqAborted);
+    req.on('aborted', this.onReqAborted.bind(this));
 
     const state = req._readableState;
     if (req._decoder || (state && (state.encoding || state.decoder))) {
@@ -187,56 +197,27 @@ export class Form extends Writable {
       return;
     }
 
-    setUpParser(self, boundary);
-    req.pipe(self);
+    setUpParser(this, boundary);
+    req.pipe(this);
 
-    function onReqAborted() {
-      waitend = false;
-      self.emit('aborted');
-      handleError(new Error('Request aborted'));
-    }
-
-    function onReqEnd() {
-      waitend = false;
-    }
-
-    function handleError(err) {
-      const first = !self.error;
-      if (first) {
-        self.error = err;
-        req.removeListener('aborted', onReqAborted);
-        req.removeListener('end', onReqEnd);
-        if (self.destStream) {
-          errorEventQueue(self, self.destStream, err);
-        }
-      }
-
-      cleanupOpenFiles(self);
-
-      if (first) {
-        self.emit('error', err);
-      }
-    }
-
-    function validationError(err) {
+    function validationError(err: Error) {
       // handle error on next tick for event listeners to attach
-      process.nextTick(handleError.bind(null, err));
+      process.nextTick(self.handleError.bind(self, err));
     }
   }
 
-  _write(buffer, encoding, cb) {
+  _write(buffer: Buffer, encoding, cb) {
     if (this.error) return;
 
-    const self = this;
     let i = 0;
     const len = buffer.length;
-    let prevIndex = self.index;
-    let index = self.index;
-    let state = self.state;
-    const lookbehind = self.lookbehind;
-    const boundary = self.boundary;
-    const boundaryChars = self.boundaryChars;
-    const boundaryLength = self.boundary.length;
+    let prevIndex = this.index;
+    let index = this.index;
+    let state = this.state;
+    const lookbehind = this.lookbehind;
+    const boundary = this.boundary;
+    const boundaryChars = this.boundaryChars;
+    const boundaryLength = this.boundary.length;
     const boundaryEnd = boundaryLength - 1;
     const bufferLength = buffer.length;
     let c;
@@ -255,13 +236,13 @@ export class Form extends Writable {
             state = CLOSE_BOUNDARY;
             break;
           } else if (index === boundaryLength - 2) {
-            if (c !== CR) return self.handleError(createError(400, 'Expected CR Received ' + c));
+            if (c !== CR) return this.handleError(createError(400, 'Expected CR Received ' + c));
             index++;
             break;
           } else if (index === boundaryLength - 1) {
-            if (c !== LF) return self.handleError(createError(400, 'Expected LF Received ' + c));
+            if (c !== LF) return this.handleError(createError(400, 'Expected LF Received ' + c));
             index = 0;
-            self.onParsePartBegin();
+            this.onParsePartBegin();
             state = HEADER_FIELD_START;
             break;
           }
@@ -271,12 +252,12 @@ export class Form extends Writable {
           break;
         case HEADER_FIELD_START:
           state = HEADER_FIELD;
-          self.headerFieldMark = i;
+          this.headerFieldMark = i;
           index = 0;
         /* falls through */
         case HEADER_FIELD:
           if (c === CR) {
-            self.headerFieldMark = null;
+            this.headerFieldMark = null;
             state = HEADERS_ALMOST_DONE;
             break;
           }
@@ -287,48 +268,48 @@ export class Form extends Writable {
           if (c === COLON) {
             if (index === 1) {
               // empty header field
-              self.handleError(createError(400, 'Empty header field'));
+              this.handleError(createError(400, 'Empty header field'));
               return;
             }
-            self.onParseHeaderField(buffer.slice(self.headerFieldMark, i));
-            self.headerFieldMark = null;
+            this.onParseHeaderField(buffer.slice(this.headerFieldMark, i));
+            this.headerFieldMark = null;
             state = HEADER_VALUE_START;
             break;
           }
 
           cl = lower(c);
           if (cl < A || cl > Z) {
-            self.handleError(createError(400, 'Expected alphabetic character, received ' + c));
+            this.handleError(createError(400, 'Expected alphabetic character, received ' + c));
             return;
           }
           break;
         case HEADER_VALUE_START:
           if (c === SPACE) break;
 
-          self.headerValueMark = i;
+          this.headerValueMark = i;
           state = HEADER_VALUE;
         /* falls through */
         case HEADER_VALUE:
           if (c === CR) {
-            self.onParseHeaderValue(buffer.slice(self.headerValueMark, i));
-            self.headerValueMark = null;
-            self.onParseHeaderEnd();
+            this.onParseHeaderValue(buffer.slice(this.headerValueMark, i));
+            this.headerValueMark = null;
+            this.onParseHeaderEnd();
             state = HEADER_VALUE_ALMOST_DONE;
           }
           break;
         case HEADER_VALUE_ALMOST_DONE:
-          if (c !== LF) return self.handleError(createError(400, 'Expected LF Received ' + c));
+          if (c !== LF) return this.handleError(createError(400, 'Expected LF Received ' + c));
           state = HEADER_FIELD_START;
           break;
         case HEADERS_ALMOST_DONE:
-          if (c !== LF) return self.handleError(createError(400, 'Expected LF Received ' + c));
-          const err = self.onParseHeadersEnd(i + 1);
-          if (err) return self.handleError(err);
+          if (c !== LF) return this.handleError(createError(400, 'Expected LF Received ' + c));
+          const err = this.onParseHeadersEnd(i + 1);
+          if (err) return this.handleError(err);
           state = PART_DATA_START;
           break;
         case PART_DATA_START:
           state = PART_DATA;
-          self.partDataMark = i;
+          this.partDataMark = i;
         /* falls through */
         case PART_DATA:
           prevIndex = index;
@@ -346,8 +327,8 @@ export class Form extends Writable {
           if (index < boundaryLength) {
             if (boundary[index] === c) {
               if (index === 0) {
-                self.onParsePartData(buffer.slice(self.partDataMark, i));
-                self.partDataMark = null;
+                this.onParsePartData(buffer.slice(this.partDataMark, i));
+                this.partDataMark = null;
               }
               index++;
             } else {
@@ -357,7 +338,7 @@ export class Form extends Writable {
             index++;
             if (c === CR) {
               // CR = part boundary
-              self.partBoundaryFlag = true;
+              this.partBoundaryFlag = true;
             } else if (c === HYPHEN) {
               index = 1;
               state = CLOSE_BOUNDARY;
@@ -366,12 +347,12 @@ export class Form extends Writable {
               index = 0;
             }
           } else if (index - 1 === boundaryLength) {
-            if (self.partBoundaryFlag) {
+            if (this.partBoundaryFlag) {
               index = 0;
               if (c === LF) {
-                self.partBoundaryFlag = false;
-                self.onParsePartEnd();
-                self.onParsePartBegin();
+                this.partBoundaryFlag = false;
+                this.onParsePartEnd();
+                this.onParsePartBegin();
                 state = HEADER_FIELD_START;
                 break;
               }
@@ -387,9 +368,9 @@ export class Form extends Writable {
           } else if (prevIndex > 0) {
             // if our boundary turned out to be rubbish, the captured lookbehind
             // belongs to partData
-            self.onParsePartData(lookbehind.slice(0, prevIndex));
+            this.onParsePartData(lookbehind.slice(0, prevIndex));
             prevIndex = 0;
-            self.partDataMark = i;
+            this.partDataMark = i;
 
             // reconsider the current character even so it interrupted the sequence
             // it could be the beginning of a new sequence
@@ -398,44 +379,44 @@ export class Form extends Writable {
 
           break;
         case CLOSE_BOUNDARY:
-          if (c !== HYPHEN) return self.handleError(createError(400, 'Expected HYPHEN Received ' + c));
+          if (c !== HYPHEN) return this.handleError(createError(400, 'Expected HYPHEN Received ' + c));
           if (index === 1) {
-            self.onParsePartEnd();
+            this.onParsePartEnd();
             state = END;
           } else if (index > 1) {
-            return self.handleError(new Error('Parser has invalid state.'));
+            return this.handleError(new Error('Parser has invalid state.'));
           }
           index++;
           break;
         case END:
           break;
         default:
-          self.handleError(new Error('Parser has invalid state.'));
+          this.handleError(new Error('Parser has invalid state.'));
           return;
       }
     }
 
-    if (self.headerFieldMark != null) {
-      self.onParseHeaderField(buffer.slice(self.headerFieldMark));
-      self.headerFieldMark = 0;
+    if (this.headerFieldMark != null) {
+      this.onParseHeaderField(buffer.slice(this.headerFieldMark));
+      this.headerFieldMark = 0;
     }
-    if (self.headerValueMark != null) {
-      self.onParseHeaderValue(buffer.slice(self.headerValueMark));
-      self.headerValueMark = 0;
+    if (this.headerValueMark != null) {
+      this.onParseHeaderValue(buffer.slice(this.headerValueMark));
+      this.headerValueMark = 0;
     }
-    if (self.partDataMark != null) {
-      self.onParsePartData(buffer.slice(self.partDataMark));
-      self.partDataMark = 0;
+    if (this.partDataMark != null) {
+      this.onParsePartData(buffer.slice(this.partDataMark));
+      this.partDataMark = 0;
     }
 
-    self.index = index;
-    self.state = state;
+    this.index = index;
+    this.state = state;
 
-    self.bytesReceived += buffer.length;
-    self.emit('progress', self.bytesReceived, self.bytesExpected);
+    this.bytesReceived += buffer.length;
+    this.emit('progress', this.bytesReceived, this.bytesExpected);
 
-    if (self.backpressure) {
-      self.writeCbs.push(cb);
+    if (this.backpressure) {
+      this.writeCbs.push(cb);
     } else {
       cb();
     }
@@ -493,46 +474,73 @@ export class Form extends Writable {
   }
 
   onParseHeadersEnd(offset) {
-    const self = this;
-    switch (self.partTransferEncoding) {
+    switch (this.partTransferEncoding) {
       case 'binary':
       case '7bit':
       case '8bit':
-        self.partTransferEncoding = 'binary';
+        this.partTransferEncoding = 'binary';
         break;
 
       case 'base64':
         break;
       default:
-        return createError(400, 'unknown transfer-encoding: ' + self.partTransferEncoding);
+        return createError(400, 'unknown transfer-encoding: ' + this.partTransferEncoding);
     }
 
-    self.totalFieldCount += 1;
-    if (self.totalFieldCount > self.maxFields) {
-      return createError(413, 'maxFields ' + self.maxFields + ' exceeded.');
+    this.totalFieldCount += 1;
+    if (this.totalFieldCount > this.maxFields) {
+      return createError(413, 'maxFields ' + this.maxFields + ' exceeded.');
     }
 
-    self.destStream = new stream.PassThrough();
-    self.destStream.on('drain', () => {
-      flushWriteCbs(self);
+    this.destStream = new PassThrough() as PassThroughExt;
+    this.destStream.on('drain', () => {
+      flushWriteCbs(this);
     });
-    self.destStream.headers = self.partHeaders;
-    self.destStream.name = self.partName;
-    self.destStream.filename = self.partFilename;
-    self.destStream.byteOffset = self.bytesReceived + offset;
-    const partContentLength = self.destStream.headers['content-length'];
-    self.destStream.byteCount = partContentLength
+    this.destStream.headers = this.partHeaders;
+    this.destStream.name = this.partName;
+    this.destStream.filename = this.partFilename;
+    this.destStream.byteOffset = this.bytesReceived + offset;
+    const partContentLength = this.destStream.headers['content-length'];
+    this.destStream.byteCount = partContentLength
       ? parseInt(partContentLength, 10)
-      : self.bytesExpected
-      ? self.bytesExpected - self.destStream.byteOffset - self.boundary.length - LAST_BOUNDARY_SUFFIX_LEN
+      : this.bytesExpected
+      ? this.bytesExpected - this.destStream.byteOffset - this.boundary.length - LAST_BOUNDARY_SUFFIX_LEN
       : undefined;
 
-    if (self.destStream.filename == null && self.autoFields) {
-      handleField(self, self.destStream);
-    } else if (self.destStream.filename != null && self.autoFiles) {
-      handleFile(self, self.destStream);
+    if (this.destStream.filename == null && this.autoFields) {
+      handleField(this, this.destStream);
+    } else if (this.destStream.filename != null && this.autoFiles) {
+      handleFile(this, this.destStream);
     } else {
-      handlePart(self, self.destStream);
+      handlePart(this, this.destStream);
     }
+  }
+
+  protected handleError(err: Error) {
+    const first = !this.error;
+    if (first) {
+      this.error = err;
+      this.req.removeListener('aborted', this.onReqAborted.bind(this));
+      this.req.removeListener('end', this.onReqEnd.bind(this));
+      if (this.destStream) {
+        errorEventQueue(this, this.destStream, err);
+      }
+    }
+
+    cleanupOpenFiles(this);
+
+    if (first) {
+      this.emit('error', err);
+    }
+  }
+
+  protected onReqAborted() {
+    this.waitend = false;
+    this.emit('aborted');
+    this.handleError(new Error('Request aborted'));
+  }
+
+  protected onReqEnd() {
+    this.waitend = false;
   }
 }
