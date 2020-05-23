@@ -530,7 +530,7 @@ export class Form extends Writable {
     } else if (this.destStream.filename != null && this.autoFiles) {
       this.handleFile(this, this.destStream);
     } else {
-      this.handlePart(this, this.destStream);
+      this.handlePart(this.destStream);
     }
   }
 
@@ -698,14 +698,14 @@ export class Form extends Writable {
     });
   }
 
-  protected handlePart(self, partStream) {
+  protected handlePart(partStream) {
     this.beginFlush();
-    const emitAndReleaseHold = this.holdEmitQueue(self, partStream);
+    const emitAndReleaseHold = this.holdEmitQueue(this, partStream);
     partStream.on('end', () => {
       this.endFlush();
     });
     emitAndReleaseHold(() => {
-      self.emit('part', partStream);
+      this.emit('part', partStream);
     });
   }
 
