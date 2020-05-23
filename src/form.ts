@@ -1,23 +1,20 @@
+import fs = require('fs');
 import os = require('os');
 import { PassThrough } from 'stream';
 import { Writable } from 'stream';
 import { IncomingMessage, IncomingHttpHeaders } from 'http';
 import { StringDecoder } from 'string_decoder';
 import createError = require('http-errors');
+import { Buffer as SafeBuffer } from 'safe-buffer';
+const fdSlicer = require('fd-slicer');
+import uid = require('uid-safe');
+import path = require('path');
 
 import { FormOptions, Fn, ObjectAny } from './types';
-import {
-  flushWriteCbs,
-  getBytesExpected,
-  cleanupOpenFiles,
-  errorEventQueue,
-  handlePart,
-  handleFile,
-  START,
-  END,
-  handleField,
-  setUpParser,
-} from './utils';
+
+export const START = 0;
+export const END = 11;
+const FILE_EXT_RE = /(\.[_\-a-zA-Z0-9]{0,16})[\S\s]*/;
 
 const START_BOUNDARY = 1;
 const HEADER_FIELD_START = 2;
@@ -172,7 +169,7 @@ export class Form extends Writable {
       });
     }
 
-    this.bytesExpected = getBytesExpected(this.req.headers);
+    this.bytesExpected = this.getBytesExpected(this.req.headers);
 
     this.boundOnReqEnd = this.onReqEnd.bind(this);
     this.req.on('end', this.boundOnReqEnd);
@@ -218,7 +215,7 @@ export class Form extends Writable {
       return;
     }
 
-    setUpParser(this, boundary);
+    this.setUpParser(this, boundary);
     this.req.pipe(this);
 
     function validationError(err: Error) {
@@ -485,7 +482,7 @@ export class Form extends Writable {
 
   onParsePartEnd() {
     if (this.destStream) {
-      flushWriteCbs(this);
+      this.flushWriteCbs(this);
       const s = this.destStream;
       process.nextTick(() => {
         s.end();
@@ -515,7 +512,7 @@ export class Form extends Writable {
 
     this.destStream = new PassThrough() as PassThroughExt;
     this.destStream.on('drain', () => {
-      flushWriteCbs(this);
+      this.flushWriteCbs(this);
     });
     this.destStream.headers = this.partHeaders;
     this.destStream.name = this.partName;
@@ -529,11 +526,11 @@ export class Form extends Writable {
       : undefined;
 
     if (this.destStream.filename == null && this.autoFields) {
-      handleField(this, this.destStream);
+      this.handleField(this, this.destStream);
     } else if (this.destStream.filename != null && this.autoFiles) {
-      handleFile(this, this.destStream);
+      this.handleFile(this, this.destStream);
     } else {
-      handlePart(this, this.destStream);
+      this.handlePart(this, this.destStream);
     }
   }
 
@@ -548,11 +545,11 @@ export class Form extends Writable {
       this.req.removeListener('aborted', this.boundOnReqAborted);
       this.req.removeListener('end', this.boundOnReqEnd);
       if (this.destStream) {
-        errorEventQueue(this, this.destStream, err);
+        this.errorEventQueue(this, this.destStream, err);
       }
     }
 
-    cleanupOpenFiles(this);
+    this.cleanupOpenFiles(this);
 
     if (first) {
       this.emit('error', err);
@@ -591,7 +588,7 @@ export class Form extends Writable {
 
     let filename = m[1];
     filename = filename.replace(/%22|\\"/g, '"');
-    filename = filename.replace(/&#([\d]{4});/g, function (m, code) {
+    filename = filename.replace(/&#([\d]{4});/g, (m, code) => {
       return String.fromCharCode(code);
     });
     return filename.substr(filename.lastIndexOf('\\') + 1);
@@ -599,5 +596,226 @@ export class Form extends Writable {
 
   protected lower(c: number) {
     return c | 0x20;
+  }
+
+  protected flushWriteCbs(self) {
+    self.writeCbs.forEach((cb) => {
+      process.nextTick(cb);
+    });
+    self.writeCbs = [];
+    self.backpressure = false;
+  }
+
+  protected getBytesExpected(headers) {
+    const contentLength = headers['content-length'];
+    if (contentLength) {
+      return parseInt(contentLength, 10);
+    } else if (headers['transfer-encoding'] == null) {
+      return 0;
+    } else {
+      return null;
+    }
+  }
+
+  protected beginFlush(self) {
+    self.flushing += 1;
+  }
+
+  protected endFlush(self) {
+    self.flushing -= 1;
+
+    if (self.flushing < 0) {
+      // if this happens this is a critical bug in multiparty and this stack trace
+      // will help us figure it out.
+      self.handleError(new Error('unexpected endFlush'));
+      return;
+    }
+
+    if (self.flushing > 0 || self.error) return;
+
+    // go through the emit queue in case any field, file, or part events are
+    // waiting to be emitted
+    this.holdEmitQueue(self)(() => {
+      // nextTick because the user is listening to part 'end' events and we are
+      // using part 'end' events to decide when to emit 'close'. we add our 'end'
+      // handler before the user gets a chance to add theirs. So we make sure
+      // their 'end' event fires before we emit the 'close' event.
+      // this is covered by test/standalone/test-issue-36
+      process.nextTick(() => {
+        self.emit('close');
+      });
+    });
+  }
+
+  protected cleanupOpenFiles(self) {
+    self.openedFiles.forEach((internalFile) => {
+      // since fd slicer autoClose is true, destroying the only write stream
+      // is guaranteed by the API to close the fd
+      internalFile.ws.destroy();
+
+      fs.unlink(internalFile.publicFile.path, (err) => {
+        if (err) self.handleError(err);
+      });
+    });
+    self.openedFiles = [];
+  }
+
+  protected holdEmitQueue(self, eventEmitter?) {
+    const item = { cb: null, ee: eventEmitter, err: null };
+    self.emitQueue.push(item);
+    return (cb) => {
+      item.cb = cb;
+      flushEmitQueue(self);
+    };
+
+    function flushEmitQueue(self) {
+      while (self.emitQueue.length > 0 && self.emitQueue[0].cb) {
+        const item = self.emitQueue.shift();
+
+        // invoke the callback
+        item.cb();
+
+        if (item.err) {
+          // emit the delayed error
+          item.ee.emit('error', item.err);
+        }
+      }
+    }
+  }
+
+  protected errorEventQueue(self, eventEmitter, err) {
+    const items = self.emitQueue.filter((item) => {
+      return item.ee === eventEmitter;
+    });
+
+    if (items.length === 0) {
+      eventEmitter.emit('error', err);
+      return;
+    }
+
+    items.forEach((item) => {
+      item.err = err;
+    });
+  }
+
+  protected handlePart(self, partStream) {
+    this.beginFlush(self);
+    const emitAndReleaseHold = this.holdEmitQueue(self, partStream);
+    partStream.on('end', () => {
+      this.endFlush(self);
+    });
+    emitAndReleaseHold(() => {
+      self.emit('part', partStream);
+    });
+  }
+
+  protected handleFile(self, fileStream) {
+    if (self.error) return;
+    const publicFile = {
+      fieldName: fileStream.name,
+      originalFilename: fileStream.filename,
+      path: uploadPath(self.uploadDir, fileStream.filename),
+      headers: fileStream.headers,
+      size: 0,
+    };
+    const internalFile = {
+      publicFile,
+      ws: null,
+    };
+    this.beginFlush(self); // flush to write stream
+    const emitAndReleaseHold = this.holdEmitQueue(self, fileStream);
+    fileStream.on('error', (err) => {
+      self.handleError(err);
+    });
+    fs.open(publicFile.path, 'wx', (err, fd) => {
+      if (err) return self.handleError(err);
+      const slicer = fdSlicer.createFromFd(fd, { autoClose: true });
+
+      // end option here guarantees that no more than that amount will be written
+      // or else an error will be emitted
+      internalFile.ws = slicer.createWriteStream({ end: self.maxFilesSize - self.totalFileSize });
+
+      // if an error ocurred while we were waiting for fs.open we handle that
+      // cleanup now
+      self.openedFiles.push(internalFile);
+      if (self.error) return this.cleanupOpenFiles(self);
+
+      let prevByteCount = 0;
+      internalFile.ws.on('error', (err) => {
+        self.handleError(err.code === 'ETOOBIG' ? createError(413, err.message, { code: err.code }) : err);
+      });
+      internalFile.ws.on('progress', () => {
+        publicFile.size = internalFile.ws.bytesWritten;
+        const delta = publicFile.size - prevByteCount;
+        self.totalFileSize += delta;
+        prevByteCount = publicFile.size;
+      });
+      slicer.on('close', () => {
+        if (self.error) return;
+        emitAndReleaseHold(() => {
+          self.emit('file', fileStream.name, publicFile);
+        });
+        this.endFlush(self);
+      });
+      fileStream.pipe(internalFile.ws);
+    });
+
+    function uploadPath(baseDir, filename) {
+      const ext = path.extname(filename).replace(FILE_EXT_RE, '$1');
+      const name = uid.sync(18) + ext;
+      return path.join(baseDir, name);
+    }
+  }
+
+  protected handleField(self, fieldStream) {
+    let value = '';
+    const decoder = new StringDecoder(self.encoding);
+
+    this.beginFlush(self);
+    const emitAndReleaseHold = this.holdEmitQueue(self, fieldStream);
+    fieldStream.on('error', (err) => {
+      self.handleError(err);
+    });
+    fieldStream.on('readable', () => {
+      const buffer = fieldStream.read();
+      if (!buffer) return;
+
+      self.totalFieldSize += buffer.length;
+      if (self.totalFieldSize > self.maxFieldsSize) {
+        self.handleError(createError(413, 'maxFieldsSize ' + self.maxFieldsSize + ' exceeded'));
+        return;
+      }
+      value += decoder.write(buffer);
+    });
+
+    fieldStream.on('end', () => {
+      emitAndReleaseHold(() => {
+        self.emit('field', fieldStream.name, value);
+      });
+      this.endFlush(self);
+    });
+  }
+
+  protected setUpParser(self, boundary) {
+    self.boundary = SafeBuffer.alloc(boundary.length + 4);
+    self.boundary.write('\r\n--', 0, boundary.length + 4, 'ascii');
+    self.boundary.write(boundary, 4, boundary.length, 'ascii');
+    self.lookbehind = SafeBuffer.alloc(self.boundary.length + 8);
+    self.state = START;
+    self.boundaryChars = {};
+    for (let i = 0; i < self.boundary.length; i++) {
+      self.boundaryChars[self.boundary[i]] = true;
+    }
+
+    self.index = null;
+    self.partBoundaryFlag = false;
+
+    this.beginFlush(self);
+    self.on('finish', () => {
+      if (self.state !== END) {
+        self.handleError(createError(400, 'stream ended unexpectedly'));
+      }
+      this.endFlush(self);
+    });
   }
 }
