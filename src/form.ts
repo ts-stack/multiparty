@@ -526,7 +526,7 @@ export class Form extends Writable {
       : undefined;
 
     if (this.destStream.filename == null && this.autoFields) {
-      this.handleField(this, this.destStream);
+      this.handleField(this.destStream);
     } else if (this.destStream.filename != null && this.autoFiles) {
       this.handleFile(this, this.destStream);
     } else {
@@ -767,22 +767,22 @@ export class Form extends Writable {
     }
   }
 
-  protected handleField(self, fieldStream) {
+  protected handleField(fieldStream) {
     let value = '';
-    const decoder = new StringDecoder(self.encoding);
+    const decoder = new StringDecoder(this.encoding);
 
     this.beginFlush();
-    const emitAndReleaseHold = this.holdEmitQueue(self, fieldStream);
+    const emitAndReleaseHold = this.holdEmitQueue(this, fieldStream);
     fieldStream.on('error', (err) => {
-      self.handleError(err);
+      this.handleError(err);
     });
     fieldStream.on('readable', () => {
       const buffer = fieldStream.read();
       if (!buffer) return;
 
-      self.totalFieldSize += buffer.length;
-      if (self.totalFieldSize > self.maxFieldsSize) {
-        self.handleError(createError(413, 'maxFieldsSize ' + self.maxFieldsSize + ' exceeded'));
+      this.totalFieldSize += buffer.length;
+      if (this.totalFieldSize > this.maxFieldsSize) {
+        this.handleError(createError(413, 'maxFieldsSize ' + this.maxFieldsSize + ' exceeded'));
         return;
       }
       value += decoder.write(buffer);
@@ -790,7 +790,7 @@ export class Form extends Writable {
 
     fieldStream.on('end', () => {
       emitAndReleaseHold(() => {
-        self.emit('field', fieldStream.name, value);
+        this.emit('field', fieldStream.name, value);
       });
       this.endFlush();
     });
