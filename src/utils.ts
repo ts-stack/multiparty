@@ -198,25 +198,6 @@ export function setUpParser(self, boundary) {
   });
 }
 
-export function parseFilename(headerValue) {
-  let m = headerValue.match(/\bfilename="(.*?)"($|; )/i);
-  if (!m) {
-    m = headerValue.match(/\bfilename\*=utf-8''(.*?)($|; )/i);
-    if (m) {
-      m[1] = decodeURI(m[1]);
-    } else {
-      return;
-    }
-  }
-
-  let filename = m[1];
-  filename = filename.replace(/%22|\\"/g, '"');
-  filename = filename.replace(/&#([\d]{4});/g, function (m, code) {
-    return String.fromCharCode(code);
-  });
-  return filename.substr(filename.lastIndexOf('\\') + 1);
-}
-
 export function lower(c) {
   return c | 0x20;
 }

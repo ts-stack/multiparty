@@ -17,7 +17,6 @@ import {
   END,
   handleField,
   setUpParser,
-  parseFilename,
   lower,
 } from './utils';
 
@@ -466,7 +465,7 @@ export class Form extends Writable {
       if ((m = this.headerValue.match(/\bname="([^"]+)"/i))) {
         this.partName = m[1];
       }
-      this.partFilename = parseFilename(this.headerValue);
+      this.partFilename = this.parseFilename(this.headerValue);
     } else if (this.headerField == 'content-transfer-encoding') {
       this.partTransferEncoding = this.headerValue.toLowerCase();
     }
@@ -578,5 +577,24 @@ export class Form extends Writable {
     this.headerField = '';
     this.headerValueDecoder = new StringDecoder(this.encoding);
     this.headerValue = '';
+  }
+
+  protected parseFilename(headerValue: string) {
+    let m = headerValue.match(/\bfilename="(.*?)"($|; )/i);
+    if (!m) {
+      m = headerValue.match(/\bfilename\*=utf-8''(.*?)($|; )/i);
+      if (m) {
+        m[1] = decodeURI(m[1]);
+      } else {
+        return;
+      }
+    }
+
+    let filename = m[1];
+    filename = filename.replace(/%22|\\"/g, '"');
+    filename = filename.replace(/&#([\d]{4});/g, function (m, code) {
+      return String.fromCharCode(code);
+    });
+    return filename.substr(filename.lastIndexOf('\\') + 1);
   }
 }
