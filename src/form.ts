@@ -16,7 +16,6 @@ import {
   START,
   END,
   handleField,
-  clearPartVars,
   setUpParser,
   parseFilename,
   lower,
@@ -447,7 +446,7 @@ export class Form extends Writable {
   }
 
   onParsePartBegin() {
-    clearPartVars(this);
+    this.clearPartVars();
   }
 
   onParseHeaderField(b: Buffer) {
@@ -494,7 +493,7 @@ export class Form extends Writable {
         s.end();
       });
     }
-    clearPartVars(this);
+    this.clearPartVars();
   }
 
   onParseHeadersEnd(offset: number) {
@@ -566,5 +565,18 @@ export class Form extends Writable {
     this.waitend = false;
     this.emit('aborted');
     this.handleError(new Error('Request aborted'));
+  }
+
+  protected clearPartVars() {
+    this.partHeaders = {};
+    this.partName = null;
+    this.partFilename = null;
+    this.partTransferEncoding = 'binary';
+    this.destStream = null;
+
+    this.headerFieldDecoder = new StringDecoder(this.encoding);
+    this.headerField = '';
+    this.headerValueDecoder = new StringDecoder(this.encoding);
+    this.headerValue = '';
   }
 }

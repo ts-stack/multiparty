@@ -175,19 +175,6 @@ export function handleField(self, fieldStream) {
   });
 }
 
-export function clearPartVars(self) {
-  self.partHeaders = {};
-  self.partName = null;
-  self.partFilename = null;
-  self.partTransferEncoding = 'binary';
-  self.destStream = null;
-
-  self.headerFieldDecoder = new StringDecoder(self.encoding);
-  self.headerField = '';
-  self.headerValueDecoder = new StringDecoder(self.encoding);
-  self.headerValue = '';
-}
-
 export function setUpParser(self, boundary) {
   self.boundary = SafeBuffer.alloc(boundary.length + 4);
   self.boundary.write('\r\n--', 0, boundary.length + 4, 'ascii');
