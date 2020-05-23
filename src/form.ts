@@ -81,6 +81,8 @@ export class Form extends Writable {
   protected destStream: PassThroughExt;
   protected req: IncomingMessage;
   protected waitend: boolean;
+  protected boundOnReqAborted: Fn;
+  protected boundOnReqEnd: Fn;
 
   constructor(options?: FormOptions) {
     super();
@@ -156,15 +158,18 @@ export class Form extends Writable {
       });
     }
 
-    self.handleError = handleError;
     self.bytesExpected = getBytesExpected(this.req.headers);
 
-    this.req.on('end', this.onReqEnd.bind(this));
+    this.boundOnReqEnd = this.onReqEnd.bind(this);
+    this.req.on('end', this.boundOnReqEnd);
+
     this.req.on('error', (err) => {
       this.waitend = false;
-      handleError(err);
+      this.handleError(err);
     });
-    this.req.on('aborted', onReqAborted);
+
+    this.boundOnReqAborted = this.onReqAborted.bind(this);
+    this.req.on('aborted', this.boundOnReqAborted);
 
     const state = this.req._readableState;
     if (this.req._decoder || (state && (state.encoding || state.decoder))) {
@@ -202,33 +207,9 @@ export class Form extends Writable {
     setUpParser(self, boundary);
     this.req.pipe(self);
 
-    function onReqAborted() {
-      this.waitend = false;
-      self.emit('aborted');
-      handleError(new Error('Request aborted'));
-    }
-
-    function handleError(err: Error) {
-      const first = !self.error;
-      if (first) {
-        self.error = err;
-        self.req.removeListener('aborted', onReqAborted);
-        self.req.removeListener('end', self.onReqEnd.bind(self));
-        if (self.destStream) {
-          errorEventQueue(self, self.destStream, err);
-        }
-      }
-
-      cleanupOpenFiles(self);
-
-      if (first) {
-        self.emit('error', err);
-      }
-    }
-
     function validationError(err: Error) {
       // handle error on next tick for event listeners to attach
-      process.nextTick(handleError.bind(null, err));
+      process.nextTick(self.handleError.bind(self, err));
     }
   }
 
@@ -544,5 +525,29 @@ export class Form extends Writable {
 
   protected onReqEnd() {
     this.waitend = false;
+  }
+
+  protected handleError(err: Error) {
+    const first = !this.error;
+    if (first) {
+      this.error = err;
+      this.req.removeListener('aborted', this.boundOnReqAborted);
+      this.req.removeListener('end', this.boundOnReqEnd);
+      if (this.destStream) {
+        errorEventQueue(this, this.destStream, err);
+      }
+    }
+
+    cleanupOpenFiles(this);
+
+    if (first) {
+      this.emit('error', err);
+    }
+  }
+
+  protected onReqAborted() {
+    this.waitend = false;
+    this.emit('aborted');
+    this.handleError(new Error('Request aborted'));
   }
 }
