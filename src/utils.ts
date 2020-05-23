@@ -43,7 +43,20 @@ export function endFlush(self) {
     return;
   }
 
-  maybeClose(self);
+  if (self.flushing > 0 || self.error) return;
+
+  // go through the emit queue in case any field, file, or part events are
+  // waiting to be emitted
+  holdEmitQueue(self)(function () {
+    // nextTick because the user is listening to part 'end' events and we are
+    // using part 'end' events to decide when to emit 'close'. we add our 'end'
+    // handler before the user gets a chance to add theirs. So we make sure
+    // their 'end' event fires before we emit the 'close' event.
+    // this is covered by test/standalone/test-issue-36
+    process.nextTick(function () {
+      self.emit('close');
+    });
+  });
 }
 
 export function cleanupOpenFiles(self) {
@@ -215,22 +228,5 @@ export function setUpParser(self, boundary) {
       self.handleError(createError(400, 'stream ended unexpectedly'));
     }
     endFlush(self);
-  });
-}
-
-function maybeClose(self) {
-  if (self.flushing > 0 || self.error) return;
-
-  // go through the emit queue in case any field, file, or part events are
-  // waiting to be emitted
-  holdEmitQueue(self)(function () {
-    // nextTick because the user is listening to part 'end' events and we are
-    // using part 'end' events to decide when to emit 'close'. we add our 'end'
-    // handler before the user gets a chance to add theirs. So we make sure
-    // their 'end' event fires before we emit the 'close' event.
-    // this is covered by test/standalone/test-issue-36
-    process.nextTick(function () {
-      self.emit('close');
-    });
   });
 }
