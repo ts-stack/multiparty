@@ -144,6 +144,12 @@ export function handleFile(self, fileStream) {
     });
     fileStream.pipe(internalFile.ws);
   });
+
+  function uploadPath(baseDir, filename) {
+    const ext = path.extname(filename).replace(FILE_EXT_RE, '$1');
+    const name = uid.sync(18) + ext;
+    return path.join(baseDir, name);
+  }
 }
 
 export function handleField(self, fieldStream) {
@@ -227,10 +233,4 @@ function flushEmitQueue(self) {
       item.ee.emit('error', item.err);
     }
   }
-}
-
-function uploadPath(baseDir, filename) {
-  const ext = path.extname(filename).replace(FILE_EXT_RE, '$1');
-  const name = uid.sync(18) + ext;
-  return path.join(baseDir, name);
 }
