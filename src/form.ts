@@ -617,8 +617,8 @@ export class Form extends Writable {
     }
   }
 
-  protected beginFlush(self) {
-    self.flushing += 1;
+  protected beginFlush() {
+    this.flushing += 1;
   }
 
   protected endFlush(self) {
@@ -699,7 +699,7 @@ export class Form extends Writable {
   }
 
   protected handlePart(self, partStream) {
-    this.beginFlush(self);
+    this.beginFlush();
     const emitAndReleaseHold = this.holdEmitQueue(self, partStream);
     partStream.on('end', () => {
       this.endFlush(self);
@@ -722,7 +722,7 @@ export class Form extends Writable {
       publicFile,
       ws: null,
     };
-    this.beginFlush(self); // flush to write stream
+    this.beginFlush(); // flush to write stream
     const emitAndReleaseHold = this.holdEmitQueue(self, fileStream);
     fileStream.on('error', (err) => {
       self.handleError(err);
@@ -771,7 +771,7 @@ export class Form extends Writable {
     let value = '';
     const decoder = new StringDecoder(self.encoding);
 
-    this.beginFlush(self);
+    this.beginFlush();
     const emitAndReleaseHold = this.holdEmitQueue(self, fieldStream);
     fieldStream.on('error', (err) => {
       self.handleError(err);
@@ -810,7 +810,7 @@ export class Form extends Writable {
     self.index = null;
     self.partBoundaryFlag = false;
 
-    this.beginFlush(self);
+    this.beginFlush();
     self.on('finish', () => {
       if (self.state !== END) {
         self.handleError(createError(400, 'stream ended unexpectedly'));
