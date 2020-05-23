@@ -104,4 +104,4 @@ export interface ReadableState {
 /**
  * @todo Search for real the type.
  */
-export type NodeReq = IncomingMessage & { _readableState: ReadableState } & { _decoder: any };
+export type NodeReq = IncomingMessage & { _readableState?: ReadableState } & { _decoder?: any };

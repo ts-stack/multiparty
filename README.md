@@ -4,10 +4,6 @@ This is fork of `multiparty` from [f06cdb6](https://github.com/pillarjs/multipar
 
 Parse http requests with content-type `multipart/form-data`, also known as file uploads.
 
-See also [busboy](https://github.com/mscdex/busboy) - a
-[faster](https://github.com/mscdex/dicer/wiki/Benchmarks) alternative
-which may be worth looking into.
-
 ## Installation
 
 This is a [Node.js](https://nodejs.org/en/) module available through the
