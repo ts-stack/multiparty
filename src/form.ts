@@ -69,7 +69,7 @@ export class Form extends Writable {
   protected maxFieldsSize: number;
   protected maxFilesSize: number;
   protected uploadDir: string;
-  protected encoding: string;
+  protected encoding: BufferEncoding;
   protected openedFiles: string[] = [];
   protected totalFieldSize: number = 0;
   protected totalFieldCount: number = 0;
@@ -83,6 +83,23 @@ export class Form extends Writable {
   protected waitend: boolean;
   protected boundOnReqAborted: Fn;
   protected boundOnReqEnd: Fn;
+  protected partTransferEncoding: string;
+  protected partHeaders: IncomingHttpHeaders;
+  protected headerFieldDecoder: StringDecoder;
+  protected headerValueDecoder: StringDecoder;
+  protected headerField: string;
+  protected headerValue: string;
+  protected partFilename: string;
+  protected partName: string;
+  protected boundary: string;
+  protected index: number;
+  protected partDataMark: number;
+  protected headerValueMark: number;
+  protected headerFieldMark: number;
+  protected partBoundaryFlag: boolean;
+  protected state;
+  protected lookbehind;
+  protected boundaryChars;
 
   constructor(options?: FormOptions) {
     super();
@@ -433,11 +450,11 @@ export class Form extends Writable {
     clearPartVars(this);
   }
 
-  onParseHeaderField(b) {
+  onParseHeaderField(b: Buffer) {
     this.headerField += this.headerFieldDecoder.write(b);
   }
 
-  onParseHeaderValue(b) {
+  onParseHeaderValue(b: Buffer) {
     this.headerValue += this.headerValueDecoder.write(b);
   }
 
@@ -451,7 +468,7 @@ export class Form extends Writable {
         this.partName = m[1];
       }
       this.partFilename = parseFilename(this.headerValue);
-    } else if (this.headerField === 'content-transfer-encoding') {
+    } else if (this.headerField == 'content-transfer-encoding') {
       this.partTransferEncoding = this.headerValue.toLowerCase();
     }
 
@@ -461,8 +478,8 @@ export class Form extends Writable {
     this.headerValue = '';
   }
 
-  onParsePartData(b) {
-    if (this.partTransferEncoding === 'base64') {
+  onParsePartData(b: Buffer) {
+    if (this.partTransferEncoding == 'base64') {
       this.backpressure = !this.destStream.write(b.toString('ascii'), 'base64');
     } else {
       this.backpressure = !this.destStream.write(b);
@@ -480,7 +497,7 @@ export class Form extends Writable {
     clearPartVars(this);
   }
 
-  onParseHeadersEnd(offset) {
+  onParseHeadersEnd(offset: number) {
     switch (this.partTransferEncoding) {
       case 'binary':
       case '7bit':
@@ -499,7 +516,7 @@ export class Form extends Writable {
       return createError(413, 'maxFields ' + this.maxFields + ' exceeded.');
     }
 
-    this.destStream = new PassThrough();
+    this.destStream = new PassThrough() as PassThroughExt;
     this.destStream.on('drain', () => {
       flushWriteCbs(this);
     });
