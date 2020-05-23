@@ -1,7 +1,7 @@
 import os = require('os');
-import stream = require('stream');
+import { PassThrough } from 'stream';
 import { Writable } from 'stream';
-import { IncomingMessage } from 'http';
+import { IncomingMessage, IncomingHttpHeaders } from 'http';
 import { StringDecoder } from 'string_decoder';
 import createError = require('http-errors');
 
@@ -45,6 +45,14 @@ const CONTENT_TYPE_RE = /^multipart\/(?:form-data|related)(?:;|$)/i;
 const CONTENT_TYPE_PARAM_RE = /;\s*([^=]+)=(?:"([^"]+)"|([^;]+))/gi;
 const LAST_BOUNDARY_SUFFIX_LEN = 4; // --\r\n
 
+export interface PassThroughExt extends PassThrough {
+  name: string;
+  headers: IncomingHttpHeaders;
+  filename: string;
+  byteOffset: number;
+  byteCount: number;
+}
+
 export class Form extends Writable {
   /**
    * The amount of bytes received for this form so far.
@@ -70,6 +78,7 @@ export class Form extends Writable {
   protected backpressure: boolean = false;
   protected writeCbs: Fn[] = [];
   protected emitQueue: string[] = [];
+  protected destStream: PassThroughExt;
 
   constructor(options?: FormOptions) {
     super();
@@ -510,7 +519,7 @@ export class Form extends Writable {
       return createError(413, 'maxFields ' + this.maxFields + ' exceeded.');
     }
 
-    this.destStream = new stream.PassThrough();
+    this.destStream = new PassThrough();
     this.destStream.on('drain', () => {
       flushWriteCbs(this);
     });
