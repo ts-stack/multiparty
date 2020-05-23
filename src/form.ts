@@ -11,7 +11,7 @@ const fdSlicer = require('fd-slicer');
 import uid = require('uid-safe');
 import path = require('path');
 
-import { FormOptions, Fn, ObjectAny, HoldEmitQueueItem } from './types';
+import { FormOptions, Fn, ObjectAny, HoldEmitQueueItem, PassThroughExt } from './types';
 
 export const START = 0;
 export const END = 11;
@@ -39,14 +39,6 @@ const Z = 122;
 const CONTENT_TYPE_RE = /^multipart\/(?:form-data|related)(?:;|$)/i;
 const CONTENT_TYPE_PARAM_RE = /;\s*([^=]+)=(?:"([^"]+)"|([^;]+))/gi;
 const LAST_BOUNDARY_SUFFIX_LEN = 4; // --\r\n
-
-export interface PassThroughExt extends PassThrough {
-  name: string;
-  headers: IncomingHttpHeaders;
-  filename: string;
-  byteOffset: number;
-  byteCount: number;
-}
 
 export class Form extends Writable {
   /**

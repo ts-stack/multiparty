@@ -1,4 +1,6 @@
+import { PassThrough } from 'stream';
 import { EventEmitter } from 'events';
+import { IncomingHttpHeaders } from 'http';
 
 export class FormOptions {
   /**
@@ -51,4 +53,12 @@ export interface HoldEmitQueueItem {
   cb: Fn;
   ee: EventEmitter;
   err: Error;
+}
+
+export interface PassThroughExt extends PassThrough {
+  name: string;
+  headers: IncomingHttpHeaders;
+  filename: string;
+  byteOffset: number;
+  byteCount: number;
 }
