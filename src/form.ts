@@ -13,8 +13,8 @@ import path = require('path');
 
 import { FormOptions, Fn, ObjectAny, HoldEmitQueueItem, PassThroughExt } from './types';
 
-export const START = 0;
-export const END = 11;
+const START = 0;
+const END = 11;
 const FILE_EXT_RE = /(\.[_\-a-zA-Z0-9]{0,16})[\S\s]*/;
 
 const START_BOUNDARY = 1;
