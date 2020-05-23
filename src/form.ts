@@ -2,6 +2,7 @@ import fs = require('fs');
 import os = require('os');
 import { PassThrough } from 'stream';
 import { Writable } from 'stream';
+import { EventEmitter } from 'events';
 import { IncomingMessage, IncomingHttpHeaders } from 'http';
 import { StringDecoder } from 'string_decoder';
 import createError = require('http-errors');
@@ -635,7 +636,7 @@ export class Form extends Writable {
 
     // go through the emit queue in case any field, file, or part events are
     // waiting to be emitted
-    this.holdEmitQueue(this)(() => {
+    this.holdEmitQueue()(() => {
       // nextTick because the user is listening to part 'end' events and we are
       // using part 'end' events to decide when to emit 'close'. we add our 'end'
       // handler before the user gets a chance to add theirs. So we make sure
@@ -660,12 +661,12 @@ export class Form extends Writable {
     this.openedFiles = [];
   }
 
-  protected holdEmitQueue(self, eventEmitter?) {
+  protected holdEmitQueue(eventEmitter?: EventEmitter) {
     const item = { cb: null, ee: eventEmitter, err: null };
-    self.emitQueue.push(item);
+    this.emitQueue.push(item);
     return (cb) => {
       item.cb = cb;
-      flushEmitQueue(self);
+      flushEmitQueue(this);
     };
 
     function flushEmitQueue(self) {
@@ -700,7 +701,7 @@ export class Form extends Writable {
 
   protected handlePart(partStream) {
     this.beginFlush();
-    const emitAndReleaseHold = this.holdEmitQueue(this, partStream);
+    const emitAndReleaseHold = this.holdEmitQueue(partStream);
     partStream.on('end', () => {
       this.endFlush();
     });
@@ -723,7 +724,7 @@ export class Form extends Writable {
       ws: null,
     };
     this.beginFlush(); // flush to write stream
-    const emitAndReleaseHold = this.holdEmitQueue(this, fileStream);
+    const emitAndReleaseHold = this.holdEmitQueue(fileStream);
     fileStream.on('error', (err) => {
       this.handleError(err);
     });
@@ -772,7 +773,7 @@ export class Form extends Writable {
     const decoder = new StringDecoder(this.encoding);
 
     this.beginFlush();
-    const emitAndReleaseHold = this.holdEmitQueue(this, fieldStream);
+    const emitAndReleaseHold = this.holdEmitQueue(fieldStream);
     fieldStream.on('error', (err) => {
       this.handleError(err);
     });
