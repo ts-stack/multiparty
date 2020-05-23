@@ -215,7 +215,7 @@ export class Form extends Writable {
       return;
     }
 
-    this.setUpParser(this, boundary);
+    this.setUpParser(boundary);
     this.req.pipe(this);
 
     function validationError(err: Error) {
@@ -796,24 +796,24 @@ export class Form extends Writable {
     });
   }
 
-  protected setUpParser(self, boundary) {
-    self.boundary = SafeBuffer.alloc(boundary.length + 4);
-    self.boundary.write('\r\n--', 0, boundary.length + 4, 'ascii');
-    self.boundary.write(boundary, 4, boundary.length, 'ascii');
-    self.lookbehind = SafeBuffer.alloc(self.boundary.length + 8);
-    self.state = START;
-    self.boundaryChars = {};
-    for (let i = 0; i < self.boundary.length; i++) {
-      self.boundaryChars[self.boundary[i]] = true;
+  protected setUpParser(boundary) {
+    this.boundary = SafeBuffer.alloc(boundary.length + 4);
+    this.boundary.write('\r\n--', 0, boundary.length + 4, 'ascii');
+    this.boundary.write(boundary, 4, boundary.length, 'ascii');
+    this.lookbehind = SafeBuffer.alloc(this.boundary.length + 8);
+    this.state = START;
+    this.boundaryChars = {};
+    for (let i = 0; i < this.boundary.length; i++) {
+      this.boundaryChars[this.boundary[i]] = true;
     }
 
-    self.index = null;
-    self.partBoundaryFlag = false;
+    this.index = null;
+    this.partBoundaryFlag = false;
 
     this.beginFlush();
-    self.on('finish', () => {
-      if (self.state !== END) {
-        self.handleError(createError(400, 'stream ended unexpectedly'));
+    this.on('finish', () => {
+      if (this.state !== END) {
+        this.handleError(createError(400, 'stream ended unexpectedly'));
       }
       this.endFlush();
     });
