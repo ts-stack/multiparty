@@ -1,8 +1,10 @@
+import { EventEmitter } from 'events';
+
 export class FormOptions {
   /**
    * Sets encoding for the incoming form fields. Defaults to `utf8`.
    */
-  encoding?: string;
+  encoding?: BufferEncoding;
   /**
    * Limits the amount of memory all fields (not files) can allocate in bytes.
    * If this value is exceeded, an error event is emitted.
@@ -43,4 +45,10 @@ export class FormOptions {
 export type Fn = (...args: any[]) => any;
 export interface ObjectAny {
   [key: string]: any;
+}
+
+export interface HoldEmitQueueItem {
+  cb: Fn;
+  ee: EventEmitter;
+  err: Error;
 }

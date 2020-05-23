@@ -11,7 +11,7 @@ const fdSlicer = require('fd-slicer');
 import uid = require('uid-safe');
 import path = require('path');
 
-import { FormOptions, Fn, ObjectAny } from './types';
+import { FormOptions, Fn, ObjectAny, HoldEmitQueueItem } from './types';
 
 export const START = 0;
 export const END = 11;
@@ -72,7 +72,7 @@ export class Form extends Writable {
   protected flushing: number = 0;
   protected backpressure: boolean = false;
   protected writeCbs: Fn[] = [];
-  protected emitQueue: string[] = [];
+  protected emitQueue: HoldEmitQueueItem[] = [];
   protected destStream: PassThroughExt;
   protected req: IncomingMessage;
   protected waitend: boolean;
@@ -86,15 +86,15 @@ export class Form extends Writable {
   protected headerValue: string;
   protected partFilename: string;
   protected partName: string;
-  protected boundary: string;
+  protected boundary: SafeBuffer;
   protected index: number;
   protected partDataMark: number;
   protected headerValueMark: number;
   protected headerFieldMark: number;
   protected partBoundaryFlag: boolean;
-  protected state;
-  protected lookbehind;
-  protected boundaryChars;
+  protected state: number;
+  protected lookbehind: SafeBuffer;
+  protected boundaryChars: { [x: string]: boolean };
 
   constructor(options?: FormOptions) {
     super();
@@ -225,7 +225,7 @@ export class Form extends Writable {
     }
   }
 
-  _write(buffer: Buffer, encoding, cb: Fn) {
+  _write(buffer: Buffer, encoding: string, cb: Fn) {
     if (this.error) return;
 
     let i = 0;
@@ -662,7 +662,7 @@ export class Form extends Writable {
   }
 
   protected holdEmitQueue(eventEmitter?: EventEmitter) {
-    const item = { cb: null, ee: eventEmitter, err: null };
+    const item: HoldEmitQueueItem = { cb: null, ee: eventEmitter, err: null };
     this.emitQueue.push(item);
     return (cb: Fn) => {
       item.cb = cb;
@@ -680,7 +680,7 @@ export class Form extends Writable {
     };
   }
 
-  protected errorEventQueue(eventEmitter, err) {
+  protected errorEventQueue(eventEmitter: EventEmitter, err: Error) {
     const items = this.emitQueue.filter((item) => {
       return item.ee === eventEmitter;
     });
@@ -695,7 +695,7 @@ export class Form extends Writable {
     });
   }
 
-  protected handlePart(partStream) {
+  protected handlePart(partStream: PassThroughExt) {
     this.beginFlush();
     const emitAndReleaseHold = this.holdEmitQueue(partStream);
     partStream.on('end', () => {
@@ -706,7 +706,7 @@ export class Form extends Writable {
     });
   }
 
-  protected handleFile(fileStream) {
+  protected handleFile(fileStream: PassThroughExt) {
     if (this.error) return;
     const publicFile = {
       fieldName: fileStream.name,
@@ -764,7 +764,7 @@ export class Form extends Writable {
     }
   }
 
-  protected handleField(fieldStream) {
+  protected handleField(fieldStream: PassThroughExt) {
     let value = '';
     const decoder = new StringDecoder(this.encoding);
 
@@ -793,7 +793,7 @@ export class Form extends Writable {
     });
   }
 
-  protected setUpParser(boundary) {
+  protected setUpParser(boundary: string) {
     this.boundary = SafeBuffer.alloc(boundary.length + 4);
     this.boundary.write('\r\n--', 0, boundary.length + 4, 'ascii');
     this.boundary.write(boundary, 4, boundary.length, 'ascii');
