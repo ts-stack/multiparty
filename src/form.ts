@@ -482,7 +482,7 @@ export class Form extends Writable {
 
   onParsePartEnd() {
     if (this.destStream) {
-      this.flushWriteCbs(this);
+      this.flushWriteCbs();
       const s = this.destStream;
       process.nextTick(() => {
         s.end();
@@ -512,7 +512,7 @@ export class Form extends Writable {
 
     this.destStream = new PassThrough() as PassThroughExt;
     this.destStream.on('drain', () => {
-      this.flushWriteCbs(this);
+      this.flushWriteCbs();
     });
     this.destStream.headers = this.partHeaders;
     this.destStream.name = this.partName;
@@ -598,12 +598,12 @@ export class Form extends Writable {
     return c | 0x20;
   }
 
-  protected flushWriteCbs(self) {
-    self.writeCbs.forEach((cb) => {
+  protected flushWriteCbs() {
+    this.writeCbs.forEach((cb) => {
       process.nextTick(cb);
     });
-    self.writeCbs = [];
-    self.backpressure = false;
+    this.writeCbs = [];
+    this.backpressure = false;
   }
 
   protected getBytesExpected(headers) {
