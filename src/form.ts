@@ -114,8 +114,8 @@ export class Form extends Writable {
 
     if (cb) {
       // if the user supplies a callback, this implies autoFields and autoFiles
-      self.autoFields = true;
-      self.autoFiles = true;
+      this.autoFields = true;
+      this.autoFiles = true;
 
       // wait for request to end before calling cb
       const end = (done: Fn) => {
@@ -138,27 +138,27 @@ export class Form extends Writable {
 
       const fields: ObjectAny = {};
       const files: ObjectAny = {};
-      self.on('error', (err) => {
+      this.on('error', (err) => {
         end(() => {
           cb(err);
         });
       });
-      self.on('field', (name, value) => {
+      this.on('field', (name, value) => {
         const fieldsArray = fields[name] || (fields[name] = []);
         fieldsArray.push(value);
       });
-      self.on('file', (name, file) => {
+      this.on('file', (name, file) => {
         const filesArray = files[name] || (files[name] = []);
         filesArray.push(file);
       });
-      self.on('close', () => {
+      this.on('close', () => {
         end(() => {
           cb(null, fields, files);
         });
       });
     }
 
-    self.bytesExpected = getBytesExpected(this.req.headers);
+    this.bytesExpected = getBytesExpected(this.req.headers);
 
     this.boundOnReqEnd = this.onReqEnd.bind(this);
     this.req.on('end', this.boundOnReqEnd);
@@ -204,8 +204,8 @@ export class Form extends Writable {
       return;
     }
 
-    setUpParser(self, boundary);
-    this.req.pipe(self);
+    setUpParser(this, boundary);
+    this.req.pipe(this);
 
     function validationError(err: Error) {
       // handle error on next tick for event listeners to attach
