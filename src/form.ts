@@ -545,7 +545,7 @@ export class Form extends Writable {
       this.req.removeListener('aborted', this.boundOnReqAborted);
       this.req.removeListener('end', this.boundOnReqEnd);
       if (this.destStream) {
-        this.errorEventQueue(this, this.destStream, err);
+        this.errorEventQueue(this.destStream, err);
       }
     }
 
@@ -683,8 +683,8 @@ export class Form extends Writable {
     }
   }
 
-  protected errorEventQueue(self, eventEmitter, err) {
-    const items = self.emitQueue.filter((item) => {
+  protected errorEventQueue(eventEmitter, err) {
+    const items = this.emitQueue.filter((item) => {
       return item.ee === eventEmitter;
     });
 
