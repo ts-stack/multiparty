@@ -664,14 +664,10 @@ export class Form extends Writable {
   protected holdEmitQueue(eventEmitter?: EventEmitter) {
     const item = { cb: null, ee: eventEmitter, err: null };
     this.emitQueue.push(item);
-    return (cb) => {
+    return (cb: Fn) => {
       item.cb = cb;
-      flushEmitQueue(this);
-    };
-
-    function flushEmitQueue(self) {
-      while (self.emitQueue.length > 0 && self.emitQueue[0].cb) {
-        const item = self.emitQueue.shift();
+      while (this.emitQueue.length > 0 && this.emitQueue[0].cb) {
+        const item = this.emitQueue.shift();
 
         // invoke the callback
         item.cb();
@@ -681,7 +677,7 @@ export class Form extends Writable {
           item.ee.emit('error', item.err);
         }
       }
-    }
+    };
   }
 
   protected errorEventQueue(eventEmitter, err) {
