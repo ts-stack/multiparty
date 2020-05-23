@@ -542,7 +542,7 @@ export class Form extends Writable {
       }
     }
 
-    this.cleanupOpenFiles(this);
+    this.cleanupOpenFiles();
 
     if (first) {
       this.emit('error', err);
