@@ -66,6 +66,20 @@ export function holdEmitQueue(self, eventEmitter) {
     item.cb = cb;
     flushEmitQueue(self);
   };
+
+  function flushEmitQueue(self) {
+    while (self.emitQueue.length > 0 && self.emitQueue[0].cb) {
+      const item = self.emitQueue.shift();
+
+      // invoke the callback
+      item.cb();
+
+      if (item.err) {
+        // emit the delayed error
+        item.ee.emit('error', item.err);
+      }
+    }
+  }
 }
 
 export function errorEventQueue(self, eventEmitter, err) {
@@ -219,18 +233,4 @@ function maybeClose(self) {
       self.emit('close');
     });
   });
-}
-
-function flushEmitQueue(self) {
-  while (self.emitQueue.length > 0 && self.emitQueue[0].cb) {
-    const item = self.emitQueue.shift();
-
-    // invoke the callback
-    item.cb();
-
-    if (item.err) {
-      // emit the delayed error
-      item.ee.emit('error', item.err);
-    }
-  }
 }
