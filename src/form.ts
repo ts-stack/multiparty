@@ -79,6 +79,8 @@ export class Form extends Writable {
   protected writeCbs: Fn[] = [];
   protected emitQueue: string[] = [];
   protected destStream: PassThroughExt;
+  protected req: IncomingMessage;
+  protected waitend: boolean;
 
   constructor(options?: FormOptions) {
     super();
@@ -103,9 +105,10 @@ export class Form extends Writable {
   }
 
   parse(req: IncomingMessage, cb: Fn) {
+    this.req = req;
     const self = this;
     let called = false;
-    let waitend = true;
+    this.waitend = true;
 
     if (cb) {
       // if the user supplies a callback, this implies autoFields and autoFiles
@@ -120,10 +123,10 @@ export class Form extends Writable {
 
         // wait for req events to fire
         process.nextTick(() => {
-          if (waitend && req.readable) {
+          if (this.waitend && this.req.readable) {
             // dump rest of request
-            req.resume();
-            req.once('end', done);
+            this.req.resume();
+            this.req.once('end', done);
             return;
           }
 
@@ -154,24 +157,24 @@ export class Form extends Writable {
     }
 
     self.handleError = handleError;
-    self.bytesExpected = getBytesExpected(req.headers);
+    self.bytesExpected = getBytesExpected(this.req.headers);
 
-    req.on('end', onReqEnd);
-    req.on('error', (err) => {
-      waitend = false;
+    this.req.on('end', this.onReqEnd.bind(this));
+    this.req.on('error', (err) => {
+      this.waitend = false;
       handleError(err);
     });
-    req.on('aborted', onReqAborted);
+    this.req.on('aborted', onReqAborted);
 
-    const state = req._readableState;
-    if (req._decoder || (state && (state.encoding || state.decoder))) {
+    const state = this.req._readableState;
+    if (this.req._decoder || (state && (state.encoding || state.decoder))) {
       // this is a binary protocol
       // if an encoding is set, input is likely corrupted
       validationError(new Error('request encoding must not be set'));
       return;
     }
 
-    const contentType = req.headers['content-type'];
+    const contentType = this.req.headers['content-type'];
     if (!contentType) {
       validationError(createError(415, 'missing content-type header'));
       return;
@@ -197,24 +200,20 @@ export class Form extends Writable {
     }
 
     setUpParser(self, boundary);
-    req.pipe(self);
+    this.req.pipe(self);
 
     function onReqAborted() {
-      waitend = false;
+      this.waitend = false;
       self.emit('aborted');
       handleError(new Error('Request aborted'));
     }
 
-    function onReqEnd() {
-      waitend = false;
-    }
-
-    function handleError(err) {
+    function handleError(err: Error) {
       const first = !self.error;
       if (first) {
         self.error = err;
-        req.removeListener('aborted', onReqAborted);
-        req.removeListener('end', onReqEnd);
+        self.req.removeListener('aborted', onReqAborted);
+        self.req.removeListener('end', self.onReqEnd.bind(self));
         if (self.destStream) {
           errorEventQueue(self, self.destStream, err);
         }
@@ -227,13 +226,13 @@ export class Form extends Writable {
       }
     }
 
-    function validationError(err) {
+    function validationError(err: Error) {
       // handle error on next tick for event listeners to attach
       process.nextTick(handleError.bind(null, err));
     }
   }
 
-  _write(buffer, encoding, cb) {
+  _write(buffer: Buffer, encoding, cb: Fn) {
     if (this.error) return;
 
     let i = 0;
@@ -541,5 +540,9 @@ export class Form extends Writable {
     } else {
       handlePart(this, this.destStream);
     }
+  }
+
+  protected onReqEnd() {
+    this.waitend = false;
   }
 }
