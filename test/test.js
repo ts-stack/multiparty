@@ -10,7 +10,7 @@ var http = require('http');
 var net = require('net');
 var stream = require('stream');
 var assert = require('assert');
-var multiparty = require('../dist');
+var Form = require('../dist').Form;
 var mkdirp = require('mkdirp');
 var superagent = require('superagent');
 var FIXTURE_PATH = path.join(__dirname, 'fixture');
@@ -21,7 +21,7 @@ var standaloneTests = [
     name: 'chunked',
     fn: function(cb) {
       var server = http.createServer(function(req, resp) {
-        var form = new multiparty.Form();
+        var form = new Form();
 
         var partCount = 0;
         form.on('part', function(part) {
@@ -67,7 +67,7 @@ var standaloneTests = [
       var socket;
       var server = http.createServer(function (req, res) {
         var called = false;
-        var form = new multiparty.Form();
+        var form = new Form();
 
         form.parse(req, function (err, fields, files) {
           assert.ok(!called);
@@ -110,7 +110,7 @@ var standaloneTests = [
     name: 'connection aborted',
     fn: function(cb) {
       var server = http.createServer(function (req, res) {
-        var form = new multiparty.Form();
+        var form = new Form();
         var aborted_received = false;
         form.on('aborted', function () {
           aborted_received = true;
@@ -140,7 +140,7 @@ var standaloneTests = [
     name: 'content transfer encoding',
     fn: function(cb) {
       var server = http.createServer(function(req, res) {
-        var form = new multiparty.Form();
+        var form = new Form();
         form.uploadDir = TMP_PATH;
         form.on('close', function () {
           throw new Error('Unexpected "close" event');
@@ -203,7 +203,7 @@ var standaloneTests = [
           'c'
         ];
 
-        var form = new multiparty.Form({
+        var form = new Form({
           autoFields: true
         });
 
@@ -252,7 +252,7 @@ var standaloneTests = [
     name: 'epilogue last chunk',
     fn: function(cb) {
       var server = http.createServer(function(req, res) {
-        var form = new multiparty.Form();
+        var form = new Form();
 
         var partCount = 0;
         form.on('part', function(part) {
@@ -296,7 +296,7 @@ var standaloneTests = [
   {
     name: 'error listen after parse',
     fn: function(cb) {
-      var form = new multiparty.Form();
+      var form = new Form();
       var req = new stream.Readable();
 
       req.headers = {};
@@ -317,7 +317,7 @@ var standaloneTests = [
     name: 'error unpipe',
     fn: function(cb) {
       var err = null;
-      var form = new multiparty.Form();
+      var form = new Form();
       var pend = new Pend();
       var req = new stream.Readable();
       var unpiped = false;
@@ -361,7 +361,7 @@ var standaloneTests = [
     name: 'invalid',
     fn: function(cb) {
       var server = http.createServer(function(req, resp) {
-        var form = new multiparty.Form();
+        var form = new Form();
 
         form.on('error', function(err) {
           resp.end();
@@ -399,7 +399,7 @@ var standaloneTests = [
         assert.strictEqual(req.url, '/upload');
         assert.strictEqual(req.method, 'POST');
 
-        var form = new multiparty.Form({ autoFields: true, autoFiles: true })
+        var form = new Form({ autoFields: true, autoFiles: true })
 
         form.on('error', function(err) {
           console.log(err);
@@ -467,7 +467,7 @@ var standaloneTests = [
     fn: function(cb) {
       var client;
       var server = http.createServer(function (req, res) {
-        var form = new multiparty.Form({ maxFields: 1 })
+        var form = new Form({ maxFields: 1 })
         form.on('aborted', function () {
           throw new Error('did not expect aborted')
         });
@@ -512,7 +512,7 @@ var standaloneTests = [
     fn: function(cb) {
       var client;
       var server = http.createServer(function (req, res) {
-        var form = new multiparty.Form({ maxFieldsSize: 8 })
+        var form = new Form({ maxFieldsSize: 8 })
         form.on('aborted', function () {
           throw new Error('did not expect aborted')
         });
@@ -557,7 +557,7 @@ var standaloneTests = [
     fn: function(cb) {
       var client;
       var server = http.createServer(function(req, res) {
-        var form = new multiparty.Form();
+        var form = new Form();
 
         form.parse(req, function(err, fields, files) {
           if (err) {
@@ -644,7 +644,7 @@ var standaloneTests = [
     fn: function(cb) {
       var client;
       var server = http.createServer(function(req, res) {
-        var form = new multiparty.Form();
+        var form = new Form();
 
         form.parse(req, function(err, fields, files) {
           if (err) {
@@ -680,7 +680,7 @@ var standaloneTests = [
     name: 'issue 36',
     fn: function(cb) {
       var server = http.createServer(function(req, res) {
-        var form = new multiparty.Form();
+        var form = new Form();
         var endCalled = false;
         form.on('part', function(part) {
           part.on('end', function() {
@@ -719,7 +719,7 @@ var standaloneTests = [
         assert.strictEqual(req.url, '/upload');
         assert.strictEqual(req.method, 'POST');
 
-        var form = new multiparty.Form({ autoFields: true, autoFiles: true })
+        var form = new Form({ autoFields: true, autoFiles: true })
 
         form.on('error', function(err) {
           console.log(err);
@@ -766,7 +766,7 @@ var standaloneTests = [
         assert.strictEqual(req.url, '/upload');
         assert.strictEqual(req.method, 'POST');
 
-        var form = new multiparty.Form({ autoFiles: true, maxFields: 2 })
+        var form = new Form({ autoFiles: true, maxFields: 2 })
 
         var first = true;
         form.on('error', function (err) {
@@ -813,7 +813,7 @@ var standaloneTests = [
         assert.strictEqual(req.url, '/upload');
         assert.strictEqual(req.method, 'POST');
 
-        var form = new multiparty.Form({ autoFiles: true, maxFilesSize: 768323 }) // exact size of pf1y5.png
+        var form = new Form({ autoFiles: true, maxFilesSize: 768323 }) // exact size of pf1y5.png
 
         var fileCount = 0;
         form.on('file', function(name, file) {
@@ -853,7 +853,7 @@ var standaloneTests = [
         assert.strictEqual(req.url, '/upload');
         assert.strictEqual(req.method, 'POST');
 
-        var form = new multiparty.Form({ autoFiles: true, maxFilesSize: 800 * 1024 })
+        var form = new Form({ autoFiles: true, maxFilesSize: 800 * 1024 })
 
         var first = true;
         form.on('error', function (err) {
@@ -902,7 +902,7 @@ var standaloneTests = [
         assert.strictEqual(req.url, '/upload');
         assert.strictEqual(req.method, 'POST');
 
-        var form = new multiparty.Form({
+        var form = new Form({
           autoFiles: true,
           maxFilesSize: (768323 * 2) - 1 // exact size of 2 x pf1y5.png - 1
         });
@@ -951,7 +951,7 @@ var standaloneTests = [
     name: 'missing boundary end',
     fn: function(cb) {
       var server = http.createServer(function(req, resp) {
-        var form = new multiparty.Form();
+        var form = new Form();
 
         var errCount = 0;
         form.on('error', function (err) {
@@ -1001,7 +1001,7 @@ var standaloneTests = [
         assert.strictEqual(req.url, '/upload');
         assert.strictEqual(req.method, 'POST');
 
-        var form = new multiparty.Form();
+        var form = new Form();
 
         form.parse(req, function(err, fields, files) {
           assert.ok(err);
@@ -1032,7 +1032,7 @@ var standaloneTests = [
         assert.strictEqual(req.url, '/upload');
         assert.strictEqual(req.method, 'POST');
 
-        var form = new multiparty.Form();
+        var form = new Form();
 
         form.parse(req, function(err, fields, files) {
           assert.ok(err);
@@ -1065,7 +1065,7 @@ var standaloneTests = [
         assert.strictEqual(req.url, '/upload');
         assert.strictEqual(req.method, 'POST');
 
-        var form = new multiparty.Form();
+        var form = new Form();
 
         form.parse(req, function(err, fields, files) {
           assert.ok(err);
@@ -1099,7 +1099,7 @@ var standaloneTests = [
     name: 'empty header field error',
     fn: function(cb) {
       var server = http.createServer(function(req, resp) {
-        var form = new multiparty.Form();
+        var form = new Form();
 
         var partCount = 0;
         form.on('part', function(part) {
@@ -1149,7 +1149,7 @@ var standaloneTests = [
         assert.strictEqual(req.url, '/upload');
         assert.strictEqual(req.method, 'POST');
 
-        var form = new multiparty.Form();
+        var form = new Form();
 
         // this is invalid
         req.setEncoding('utf8');
@@ -1184,7 +1184,7 @@ var standaloneTests = [
     name: 'stream error',
     fn: function(cb) {
       var server = http.createServer(function (req, res) {
-        var form = new multiparty.Form();
+        var form = new Form();
         var gotPartErr;
         form.on('part', function(part) {
           part.on('error', function(err) {
@@ -1220,7 +1220,7 @@ var standaloneTests = [
     name: 'queued part error',
     fn: function(cb) {
       var server = http.createServer(function (req, res) {
-        var form = new multiparty.Form();
+        var form = new Form();
         var pend = new Pend();
 
         pend.go(function(cb){
@@ -1281,7 +1281,7 @@ var standaloneTests = [
     fn: function(cb) {
       var client;
       var server = http.createServer(function(req, res) {
-        var form = new multiparty.Form();
+        var form = new Form();
 
         form.parse(req, function(err, fields, files) {
           if (err) {
@@ -1392,7 +1392,7 @@ function uploadFixture(server, path, cb) {
   server.once('request', function(req, res) {
     var done = false
     var parts = [];
-    var form = new multiparty.Form({
+    var form = new Form({
       autoFields: true,
       autoFiles: true
     });
