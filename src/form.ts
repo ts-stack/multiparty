@@ -3,15 +3,23 @@ import os = require('os');
 import { PassThrough } from 'stream';
 import { Writable } from 'stream';
 import { EventEmitter } from 'events';
-import { IncomingMessage, IncomingHttpHeaders } from 'http';
+import { IncomingHttpHeaders } from 'http';
 import { StringDecoder } from 'string_decoder';
 import createError = require('http-errors');
-import { Buffer as SafeBuffer } from 'safe-buffer';
 const fdSlicer = require('fd-slicer');
 import uid = require('uid-safe');
 import path = require('path');
 
-import { FormOptions, Fn, ObjectAny, HoldEmitQueueItem, PassThroughExt } from './types';
+import {
+  FormOptions,
+  Fn,
+  ObjectAny,
+  HoldEmitQueueItem,
+  PassThroughExt,
+  OpenedFile,
+  PublicFile,
+  NodeReq,
+} from './types';
 
 const START = 0;
 const END = 11;
@@ -57,7 +65,7 @@ export class Form extends Writable {
   protected maxFilesSize: number;
   protected uploadDir: string;
   protected encoding: BufferEncoding;
-  protected openedFiles: string[] = [];
+  protected openedFiles: OpenedFile[] = [];
   protected totalFieldSize: number = 0;
   protected totalFieldCount: number = 0;
   protected totalFileSize: number = 0;
@@ -66,7 +74,7 @@ export class Form extends Writable {
   protected writeCbs: Fn[] = [];
   protected emitQueue: HoldEmitQueueItem[] = [];
   protected destStream: PassThroughExt;
-  protected req: IncomingMessage;
+  protected req: NodeReq;
   protected waitend: boolean;
   protected boundOnReqAborted: Fn;
   protected boundOnReqEnd: Fn;
@@ -78,14 +86,14 @@ export class Form extends Writable {
   protected headerValue: string;
   protected partFilename: string;
   protected partName: string;
-  protected boundary: SafeBuffer;
+  protected boundary: Buffer;
   protected index: number;
   protected partDataMark: number;
   protected headerValueMark: number;
   protected headerFieldMark: number;
   protected partBoundaryFlag: boolean;
   protected state: number;
-  protected lookbehind: SafeBuffer;
+  protected lookbehind: Buffer;
   protected boundaryChars: { [x: string]: boolean };
 
   constructor(options?: FormOptions) {
@@ -110,7 +118,7 @@ export class Form extends Writable {
     });
   }
 
-  parse(req: IncomingMessage, cb: Fn) {
+  parse(req: NodeReq, cb: Fn) {
     this.req = req;
     const self = this;
     let called = false;
@@ -167,7 +175,7 @@ export class Form extends Writable {
     this.boundOnReqEnd = this.onReqEnd.bind(this);
     this.req.on('end', this.boundOnReqEnd);
 
-    this.req.on('error', (err) => {
+    this.req.on('error', (err: Error) => {
       this.waitend = false;
       this.handleError(err);
     });
@@ -449,9 +457,10 @@ export class Form extends Writable {
     this.headerField = this.headerField.toLowerCase();
     this.partHeaders[this.headerField] = this.headerValue;
 
-    let m;
-    if (this.headerField === 'content-disposition') {
-      if ((m = this.headerValue.match(/\bname="([^"]+)"/i))) {
+    if (this.headerField == 'content-disposition') {
+      const m = this.headerValue.match(/\bname="([^"]+)"/i);
+
+      if (m) {
         this.partName = m[1];
       }
       this.partFilename = this.parseFilename(this.headerValue);
@@ -599,7 +608,7 @@ export class Form extends Writable {
     this.backpressure = false;
   }
 
-  protected getBytesExpected(headers) {
+  protected getBytesExpected(headers: IncomingHttpHeaders) {
     const contentLength = headers['content-length'];
     if (contentLength) {
       return parseInt(contentLength, 10);
@@ -700,14 +709,14 @@ export class Form extends Writable {
 
   protected handleFile(fileStream: PassThroughExt) {
     if (this.error) return;
-    const publicFile = {
+    const publicFile: PublicFile = {
       fieldName: fileStream.name,
       originalFilename: fileStream.filename,
       path: uploadPath(this.uploadDir, fileStream.filename),
       headers: fileStream.headers,
       size: 0,
     };
-    const internalFile = {
+    const internalFile: OpenedFile = {
       publicFile,
       ws: null,
     };
@@ -716,8 +725,8 @@ export class Form extends Writable {
     fileStream.on('error', (err) => {
       this.handleError(err);
     });
-    fs.open(publicFile.path, 'wx', (err, fd) => {
-      if (err) return this.handleError(err);
+    fs.open(publicFile.path, 'wx', (err1, fd) => {
+      if (err1) return this.handleError(err1);
       const slicer = fdSlicer.createFromFd(fd, { autoClose: true });
 
       // end option here guarantees that no more than that amount will be written
@@ -730,8 +739,8 @@ export class Form extends Writable {
       if (this.error) return this.cleanupOpenFiles();
 
       let prevByteCount = 0;
-      internalFile.ws.on('error', (err) => {
-        this.handleError(err.code === 'ETOOBIG' ? createError(413, err.message, { code: err.code }) : err);
+      internalFile.ws.on('error', (err2: Error & { code: string }) => {
+        this.handleError(err2.code === 'ETOOBIG' ? createError(413, err2.message, { code: err2.code }) : err2);
       });
       internalFile.ws.on('progress', () => {
         publicFile.size = internalFile.ws.bytesWritten;
@@ -749,7 +758,7 @@ export class Form extends Writable {
       fileStream.pipe(internalFile.ws);
     });
 
-    function uploadPath(baseDir, filename) {
+    function uploadPath(baseDir: string, filename: string) {
       const ext = path.extname(filename).replace(FILE_EXT_RE, '$1');
       const name = uid.sync(18) + ext;
       return path.join(baseDir, name);
@@ -786,10 +795,10 @@ export class Form extends Writable {
   }
 
   protected setUpParser(boundary: string) {
-    this.boundary = SafeBuffer.alloc(boundary.length + 4);
+    this.boundary = Buffer.alloc(boundary.length + 4);
     this.boundary.write('\r\n--', 0, boundary.length + 4, 'ascii');
     this.boundary.write(boundary, 4, boundary.length, 'ascii');
-    this.lookbehind = SafeBuffer.alloc(this.boundary.length + 8);
+    this.lookbehind = Buffer.alloc(this.boundary.length + 8);
     this.state = START;
     this.boundaryChars = {};
     for (let i = 0; i < this.boundary.length; i++) {

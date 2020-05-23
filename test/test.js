@@ -1,7 +1,6 @@
 
 var requireAll = require('require-all')
 
-var Buffer = require('safe-buffer').Buffer;
 var crypto = require('crypto');
 var path = require('path');
 var Pend = require('pend');

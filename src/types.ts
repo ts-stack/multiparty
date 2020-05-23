@@ -1,6 +1,7 @@
 import { PassThrough } from 'stream';
 import { EventEmitter } from 'events';
-import { IncomingHttpHeaders } from 'http';
+import { IncomingHttpHeaders, IncomingMessage } from 'http';
+import fs = require('fs');
 
 export class FormOptions {
   /**
@@ -62,3 +63,45 @@ export interface PassThroughExt extends PassThrough {
   byteOffset: number;
   byteCount: number;
 }
+
+export interface OpenedFile {
+  publicFile: PublicFile;
+  ws: fs.WriteStream;
+}
+
+export interface PublicFile {
+  fieldName: string;
+  originalFilename: string;
+  path: string;
+  headers: IncomingHttpHeaders;
+  size: number;
+}
+
+export interface ReadableState {
+  objectMode: boolean;
+  highWaterMark: number;
+  buffer: Buffer;
+  length: number;
+  pipes: this;
+  pipesCount: number;
+  flowing: boolean;
+  ended: boolean;
+  endEmitted: boolean;
+  reading: boolean;
+  sync: boolean;
+  needReadable: true;
+  emittedReadable: boolean;
+  readableListening: boolean;
+  resumeScheduled: boolean;
+  defaultEncoding: BufferEncoding;
+  ranOut: boolean;
+  awaitDrain: number;
+  readingMore: boolean;
+  decoder: null;
+  encoding: null;
+}
+
+/**
+ * @todo Search for real the type.
+ */
+export type NodeReq = IncomingMessage & { _readableState: ReadableState } & { _decoder: any };

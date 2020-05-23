@@ -1,5 +1,4 @@
 var assert = require('assert')
-var Buffer = require('safe-buffer').Buffer
 var Form = require('../dist').Form
 
 var BOUNDARY = '-----------------------------168072824752491622650073'
