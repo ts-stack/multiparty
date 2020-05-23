@@ -647,17 +647,17 @@ export class Form extends Writable {
     });
   }
 
-  protected cleanupOpenFiles(self) {
-    self.openedFiles.forEach((internalFile) => {
+  protected cleanupOpenFiles() {
+    this.openedFiles.forEach((internalFile) => {
       // since fd slicer autoClose is true, destroying the only write stream
       // is guaranteed by the API to close the fd
       internalFile.ws.destroy();
 
       fs.unlink(internalFile.publicFile.path, (err) => {
-        if (err) self.handleError(err);
+        if (err) this.handleError(err);
       });
     });
-    self.openedFiles = [];
+    this.openedFiles = [];
   }
 
   protected holdEmitQueue(self, eventEmitter?) {
@@ -738,7 +738,7 @@ export class Form extends Writable {
       // if an error ocurred while we were waiting for fs.open we handle that
       // cleanup now
       self.openedFiles.push(internalFile);
-      if (self.error) return this.cleanupOpenFiles(self);
+      if (self.error) return this.cleanupOpenFiles();
 
       let prevByteCount = 0;
       internalFile.ws.on('error', (err) => {
