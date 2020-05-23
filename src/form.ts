@@ -621,28 +621,28 @@ export class Form extends Writable {
     this.flushing += 1;
   }
 
-  protected endFlush(self) {
-    self.flushing -= 1;
+  protected endFlush() {
+    this.flushing -= 1;
 
-    if (self.flushing < 0) {
+    if (this.flushing < 0) {
       // if this happens this is a critical bug in multiparty and this stack trace
       // will help us figure it out.
-      self.handleError(new Error('unexpected endFlush'));
+      this.handleError(new Error('unexpected endFlush'));
       return;
     }
 
-    if (self.flushing > 0 || self.error) return;
+    if (this.flushing > 0 || this.error) return;
 
     // go through the emit queue in case any field, file, or part events are
     // waiting to be emitted
-    this.holdEmitQueue(self)(() => {
+    this.holdEmitQueue(this)(() => {
       // nextTick because the user is listening to part 'end' events and we are
       // using part 'end' events to decide when to emit 'close'. we add our 'end'
       // handler before the user gets a chance to add theirs. So we make sure
       // their 'end' event fires before we emit the 'close' event.
       // this is covered by test/standalone/test-issue-36
       process.nextTick(() => {
-        self.emit('close');
+        this.emit('close');
       });
     });
   }
@@ -702,7 +702,7 @@ export class Form extends Writable {
     this.beginFlush();
     const emitAndReleaseHold = this.holdEmitQueue(self, partStream);
     partStream.on('end', () => {
-      this.endFlush(self);
+      this.endFlush();
     });
     emitAndReleaseHold(() => {
       self.emit('part', partStream);
@@ -755,7 +755,7 @@ export class Form extends Writable {
         emitAndReleaseHold(() => {
           self.emit('file', fileStream.name, publicFile);
         });
-        this.endFlush(self);
+        this.endFlush();
       });
       fileStream.pipe(internalFile.ws);
     });
@@ -792,7 +792,7 @@ export class Form extends Writable {
       emitAndReleaseHold(() => {
         self.emit('field', fieldStream.name, value);
       });
-      this.endFlush(self);
+      this.endFlush();
     });
   }
 
@@ -815,7 +815,7 @@ export class Form extends Writable {
       if (self.state !== END) {
         self.handleError(createError(400, 'stream ended unexpectedly'));
       }
-      this.endFlush(self);
+      this.endFlush();
     });
   }
 }
