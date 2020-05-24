@@ -118,7 +118,7 @@ export class Form extends Writable {
     });
   }
 
-  parse(req: NodeReq, cb: Fn) {
+  parse(req: NodeReq, cb?: (err?: Error, fields?: ObjectAny, files?: ObjectAny) => void) {
     this.req = req;
     const self = this;
     let called = false;
