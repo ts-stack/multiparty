@@ -795,9 +795,6 @@ var standaloneTests = [
         req.field('a', val);
         req.field('b', val);
         req.field('c', val);
-        req.on('error', function(err) {
-          assert.ifError(err);
-        });
         req.end();
         req.on('response', function(res) {
           assert.equal(res.statusCode, 413);
@@ -880,9 +877,6 @@ var standaloneTests = [
         var req = superagent.post(url);
         req.attach('file0', fixture('pf1y5.png'), 'SOG1.JPG');
         req.attach('file1', fixture('pf1y5.png'), 'SOG2.JPG');
-        req.on('error', function(err) {
-          assert.ifError(err);
-        });
         req.end();
         req.on('response', function(res) {
           assert.equal(res.statusCode, 413);
@@ -932,9 +926,6 @@ var standaloneTests = [
         var req = superagent.post(url);
         req.attach('file0', fixture('pf1y5.png'), 'SOG1.JPG');
         req.attach('file1', fixture('pf1y5.png'), 'SOG1.JPG');
-        req.on('error', function(err) {
-          assert.ifError(err);
-        });
         req.end();
         req.on('response', function(res) {
           assert.equal(res.statusCode, 413);
@@ -1014,9 +1005,6 @@ var standaloneTests = [
       server.listen(function() {
         var url = 'http://localhost:' + server.address().port + '/upload';
         var req = superagent.post(url);
-        req.on('error', function(err) {
-          assert.ifError(err);
-        });
         req.end();
         req.on('response', function(res) {
           assert.equal(res.statusCode, 415);
@@ -1047,9 +1035,6 @@ var standaloneTests = [
         var req = superagent.post(url);
         req.set('Content-Type', 'application/json');
         req.write('{}');
-        req.on('error', function(err) {
-          assert.ifError(err);
-        });
         req.end();
         req.on('response', function(res) {
           assert.equal(res.statusCode, 415);
@@ -1079,9 +1064,6 @@ var standaloneTests = [
         var url = 'http://localhost:' + server.address().port + '/upload';
         var req = superagent.post(url);
         req.attach('file0', fixture('pf1y5.png'), 'SOG1.JPG');
-        req.on('error', function(err) {
-          assert.ifError(err);
-        });
         req.end();
         req.req.setHeader('Content-Type', 'multipart/form-data')
         req.on('response', function(res) {
@@ -1165,9 +1147,6 @@ var standaloneTests = [
         var url = 'http://localhost:' + server.address().port + '/upload';
         var req = superagent.post(url);
         req.attach('file0', fixture('pf1y5.png'), 'SOG1.JPG');
-        req.on('error', function(err) {
-          assert.ifError(err);
-        });
         req.end();
         req.on('response', function(res) {
           assert.equal(res.statusCode, 500);
