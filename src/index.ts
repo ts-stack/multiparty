@@ -1,2 +1,2 @@
 export { Form } from './form';
-export { FormOptions } from './types';
+export { FormOptions, PartEvent, FormFile } from './types';

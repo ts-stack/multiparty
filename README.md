@@ -205,14 +205,14 @@ Unless you supply a callback to `form.parse`, you definitely want to handle
 this event. Otherwise your server *will* crash when users submit bogus
 multipart requests!
 
-Only one 'error' event can ever be emitted, and if an 'error' event is
-emitted, then 'close' will not be emitted.
+Only one `error` event can ever be emitted, and if an `error` event is
+emitted, then `close` will not be emitted.
 
 If the error would correspond to a certain HTTP response code, the `err` object
 will have a `statusCode` property with the value of the suggested HTTP response
 code to send back.
 
-Note that an 'error' event will be emitted both from the `form` and from the
+Note that an `error` event will be emitted both from the `form` and from the
 current `part`.
 
 #### 'part' (part)

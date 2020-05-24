@@ -1,6 +1,6 @@
 import fs = require('fs');
 import os = require('os');
-import { PassThrough } from 'stream';
+import { PassThrough, Readable } from 'stream';
 import { Writable } from 'stream';
 import { EventEmitter } from 'events';
 import { IncomingHttpHeaders } from 'http';
@@ -19,6 +19,8 @@ import {
   OpenedFile,
   PublicFile,
   NodeReq,
+  PartEvent,
+  FormFile,
 } from './types';
 
 const START = 0;
@@ -118,7 +120,7 @@ export class Form extends Writable {
     });
   }
 
-  parse(req: NodeReq, cb?: (err?: Error, fields?: ObjectAny, files?: ObjectAny) => void) {
+  parse(req: NodeReq, cb?: (err?: Error & { statusCode?: number }, fields?: ObjectAny, files?: ObjectAny) => void) {
     this.req = req;
     const self = this;
     let called = false;
@@ -223,6 +225,70 @@ export class Form extends Writable {
       // handle error on next tick for event listeners to attach
       process.nextTick(self.handleError.bind(self, err));
     }
+  }
+
+  /**
+   * Unless you supply a callback to `form.parse`, you definitely want to handle
+   * this event. Otherwise your server *will* crash when users submit bogus
+   * multipart requests!
+   *
+   * Only one `error` event can ever be emitted, and if an `error` event is
+   * emitted, then `close` will not be emitted.
+   *
+   * If the error would correspond to a certain HTTP response code, the `err` object
+   * will have a `statusCode` property with the value of the suggested HTTP response
+   * code to send back.
+   *
+   * Note that an `error` event will be emitted both from the `form` and from the
+   * current `part`.
+   */
+  on(event: 'error', listener: (err: Error & { statusCode?: number }) => void): this;
+  /**
+   * Emitted when a part is encountered in the request.
+   * Parts for fields are not emitted when `autoFields` is on, and likewise parts
+   * for files are not emitted when `autoFiles` is on.
+   *
+   * `part` emits 'error' events! Make sure you handle them.
+   */
+  on(event: 'part', listener: (part: PartEvent) => void): this;
+  /**
+   * Emitted when the request is aborted. This event will be followed shortly
+   * by an `error` event. In practice you do not need to handle this event.
+   */
+  on(event: 'aborted', listener: () => void): this;
+  /**
+   * Emitted when a chunk of data is received for the form. The `bytesReceived`
+   * argument contains the total count of bytes received for this form so far. The
+   * `bytesExpected` argument contains the total expected bytes if known, otherwise
+   * `null`.
+   */
+  on(event: 'progress', listener: (bytesReceived?: number, bytesExpected?: number) => void): this;
+  /**
+   * Emitted after all parts have been parsed and emitted. Not emitted if an `error`
+   * event is emitted.
+   *
+   * If you have `autoFiles` on, this is not fired until all the data has been
+   * flushed to disk and the file handles have been closed.
+   *
+   * This is typically when you would send your response.
+   */
+  on(event: 'close', listener: () => void): this;
+  /**
+   * **By default multiparty will not touch your hard drive.** But if you add this
+   * listener, multiparty automatically sets `form.autoFiles` to `true` and will
+   * stream uploads to disk for you.
+   *
+   * **The max bytes accepted per request can be specified with `maxFilesSize`.**
+   */
+  on(event: 'file', listener: (name?: string, file?: FormFile) => void): this;
+  on(event: 'field', listener: (name?: string, value?: string) => void): this;
+  on(event: 'drain', listener: () => void): this;
+  on(event: 'finish', listener: () => void): this;
+  on(event: 'pipe', listener: (src: Readable) => void): this;
+  on(event: 'unpipe', listener: (src: Readable) => void): this;
+  on(event: 'newListener', listener: (event: string) => void): this;
+  on(event: string, listener: (...args: any[]) => void) {
+    return super.on(event, listener);
   }
 
   _write(buffer: Buffer, encoding: string, cb: Fn) {

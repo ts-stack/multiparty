@@ -105,3 +105,52 @@ export interface ReadableState {
  * @todo Search for real the type.
  */
 export type NodeReq = IncomingMessage & { _readableState?: ReadableState } & { _decoder?: any };
+
+export interface PartEvent extends ReadableStream {
+  /**
+   * The headers for this part. For example, you may be interested in `content-type`.
+   */
+  headers: IncomingHttpHeaders;
+  /**
+   * The field name for this part.
+   */
+  name: string;
+  /**
+   * Only if the part is an incoming file.
+   */
+  filename: string;
+  /**
+   * The byte offset of this part in the request body.
+   */
+  byteOffset: number;
+  /**
+   * Assuming that this is the last part in the request, this is the size of this part in bytes.
+   * You could use this, for example, to set the `Content-Length` header if uploading to S3.
+   * If the part had a `Content-Length` header then that value is used here instead.
+   */
+  byteCount: number;
+  on(event: 'error', listener: (err: Error & { statusCode?: number }) => void): this;
+}
+
+export interface FormFile {
+  /**
+   * Same as `name` - the field name for this file.
+   */
+  fieldName: string;
+  /**
+   * The filename that the user reports for the file.
+   */
+  originalFilename: string;
+  /**
+   * The absolute path of the uploaded file on disk.
+   */
+  path: string;
+  /**
+   * The HTTP headers that were sent along with this file.
+   */
+  headers: IncomingHttpHeaders;
+  /**
+   * Size of the file in bytes.
+   */
+  size: number;
+}
