@@ -288,6 +288,10 @@ export class Form extends Writable {
    * **The max bytes accepted per request can be specified with `maxFilesSize`.**
    */
   on(event: 'file', listener: (name?: string, file?: FormFile) => void): this;
+  /**
+   * - `name` - field name.
+   * - `value` - string field value.
+   */
   on(event: 'field', listener: (name?: string, value?: string) => void): this;
   on(event: 'drain', listener: () => void): this;
   on(event: 'finish', listener: () => void): this;

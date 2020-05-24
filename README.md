@@ -1,8 +1,8 @@
-# multiparty
-
-This is fork of `multiparty` from [this state](https://github.com/pillarjs/multiparty/tree/f06cd), writen in TypeScript.
+# @ts-stack/multiparty
 
 Parse http requests with content-type `multipart/form-data`, also known as file uploads.
+
+This is fork of `multiparty` from [this state](https://github.com/pillarjs/multiparty/tree/f06cd), writen in TypeScript.
 
 ## Why the fork?
 
@@ -17,7 +17,7 @@ This is a [Node.js](https://nodejs.org/en/) module available through the
 [npm registry](https://www.npmjs.com/). Installation is done using the
 [`npm install` command](https://docs.npmjs.com/getting-started/installing-npm-packages-locally):
 
-```
+```bash
 npm install @ts-stack/multiparty
 ```
 
@@ -68,7 +68,7 @@ import { Form } from '@ts-stack/multiparty';
 const form = new Form(options)
 ```
 
-Creates a new form. Options:
+Creates a new form.
 
 ```ts
 export class FormOptions {
@@ -122,6 +122,8 @@ Parses an incoming node.js `request` containing form data.This will cause
 ```ts
 import { Form } from '@ts-stack/multiparty';
 
+// ...
+
 let count = 0;
 const form = new Form();
 
@@ -166,6 +168,9 @@ form.on('close', () => {
 
 // Parse req
 form.parse(req);
+
+// ...
+
 ```
 
 If `cb` is provided, `autoFields` and `autoFiles` are set to `true` and all
@@ -206,85 +211,124 @@ The expected number of bytes in this form.
 
 ### Events
 
-#### 'error' (err)
+```ts
+/**
+ * Unless you supply a callback to `form.parse`, you definitely want to handle
+ * this event. Otherwise your server *will* crash when users submit bogus
+ * multipart requests!
+ *
+ * Only one `error` event can ever be emitted, and if an `error` event is
+ * emitted, then `close` will not be emitted.
+ *
+ * If the error would correspond to a certain HTTP response code, the `err` object
+ * will have a `statusCode` property with the value of the suggested HTTP response
+ * code to send back.
+ *
+ * Note that an `error` event will be emitted both from the `form` and from the
+ * current `part`.
+ */
+on(event: 'error', listener: (err: Error & { statusCode?: number }) => void): this;
+/**
+ * Emitted when a part is encountered in the request.
+ * Parts for fields are not emitted when `autoFields` is on, and likewise parts
+ * for files are not emitted when `autoFiles` is on.
+ *
+ * `part` emits 'error' events! Make sure you handle them.
+ *
+ * You *must* act on the part by reading it.
+ * If you want to ignore it, just call `part.resume()`.
+ */
+on(event: 'part', listener: (part: PartEvent) => void): this;
+/**
+ * Emitted when the request is aborted. This event will be followed shortly
+ * by an `error` event. In practice you do not need to handle this event.
+ */
+on(event: 'aborted', listener: () => void): this;
+/**
+ * Emitted when a chunk of data is received for the form. The `bytesReceived`
+ * argument contains the total count of bytes received for this form so far. The
+ * `bytesExpected` argument contains the total expected bytes if known, otherwise
+ * `null`.
+ */
+on(event: 'progress', listener: (bytesReceived?: number, bytesExpected?: number) => void): this;
+/**
+ * Emitted after all parts have been parsed and emitted. Not emitted if an `error`
+ * event is emitted.
+ *
+ * If you have `autoFiles` on, this is not fired until all the data has been
+ * flushed to disk and the file handles have been closed.
+ *
+ * This is typically when you would send your response.
+ */
+on(event: 'close', listener: () => void): this;
+/**
+ * **By default multiparty will not touch your hard drive.** But if you add this
+ * listener, multiparty automatically sets `form.autoFiles` to `true` and will
+ * stream uploads to disk for you.
+ *
+ * **The max bytes accepted per request can be specified with `maxFilesSize`.**
+ */
+on(event: 'file', listener: (name?: string, file?: FormFile) => void): this;
+/**
+ * - `name` - field name.
+ * - `value` - string field value.
+ */
+on(event: 'field', listener: (name?: string, value?: string) => void): this;
+```
 
-Unless you supply a callback to `form.parse`, you definitely want to handle
-this event. Otherwise your server *will* crash when users submit bogus
-multipart requests!
+Where `PartEvent` and `FormFile` is:
 
-Only one `error` event can ever be emitted, and if an `error` event is
-emitted, then `close` will not be emitted.
+```ts
+interface PartEvent extends ReadableStream {
+  /**
+   * The headers for this part. For example, you may be interested in `content-type`.
+   */
+  headers: IncomingHttpHeaders;
+  /**
+   * The field name for this part.
+   */
+  name: string;
+  /**
+   * Only if the part is an incoming file.
+   */
+  filename: string;
+  /**
+   * The byte offset of this part in the request body.
+   */
+  byteOffset: number;
+  /**
+   * Assuming that this is the last part in the request, this is the size of this part in bytes.
+   * You could use this, for example, to set the `Content-Length` header if uploading to S3.
+   * If the part had a `Content-Length` header then that value is used here instead.
+   */
+  byteCount: number;
+  on(event: 'error', listener: (err: Error & { statusCode?: number }) => void): this;
+  resume(): this;
+}
 
-If the error would correspond to a certain HTTP response code, the `err` object
-will have a `statusCode` property with the value of the suggested HTTP response
-code to send back.
-
-Note that an `error` event will be emitted both from the `form` and from the
-current `part`.
-
-#### 'part' (part)
-
-Emitted when a part is encountered in the request. `part` is a
-`ReadableStream`. It also has the following properties:
-
- * `headers` - the headers for this part. For example, you may be interested
-   in `content-type`.
- * `name` - the field name for this part
- * `filename` - only if the part is an incoming file
- * `byteOffset` - the byte offset of this part in the request body
- * `byteCount` - assuming that this is the last part in the request,
-   this is the size of this part in bytes. You could use this, for
-   example, to set the `Content-Length` header if uploading to S3.
-   If the part had a `Content-Length` header then that value is used
-   here instead.
-
-Parts for fields are not emitted when `autoFields` is on, and likewise parts
-for files are not emitted when `autoFiles` is on.
-
-`part` emits 'error' events! Make sure you handle them.
-
-#### 'aborted'
-
-Emitted when the request is aborted. This event will be followed shortly
-by an `error` event. In practice you do not need to handle this event.
-
-#### 'progress' (bytesReceived, bytesExpected)
-
-Emitted when a chunk of data is received for the form. The `bytesReceived`
-argument contains the total count of bytes received for this form so far. The
-`bytesExpected` argument contains the total expected bytes if known, otherwise
-`null`.
-
-#### 'close'
-
-Emitted after all parts have been parsed and emitted. Not emitted if an `error`
-event is emitted.
-
-If you have `autoFiles` on, this is not fired until all the data has been
-flushed to disk and the file handles have been closed.
-
-This is typically when you would send your response.
-
-#### 'file' (name, file)
-
-**By default multiparty will not touch your hard drive.** But if you add this
-listener, multiparty automatically sets `form.autoFiles` to `true` and will
-stream uploads to disk for you.
-
-**The max bytes accepted per request can be specified with `maxFilesSize`.**
-
- * `name` - the field name for this file
- * `file` - an object with these properties:
-   - `fieldName` - same as `name` - the field name for this file
-   - `originalFilename` - the filename that the user reports for the file
-   - `path` - the absolute path of the uploaded file on disk
-   - `headers` - the HTTP headers that were sent along with this file
-   - `size` - size of the file in bytes
-
-#### 'field' (name, value)
-
- * `name` - field name
- * `value` - string field value
+interface FormFile {
+  /**
+   * Same as `name` - the field name for this file.
+   */
+  fieldName: string;
+  /**
+   * The filename that the user reports for the file.
+   */
+  originalFilename: string;
+  /**
+   * The absolute path of the uploaded file on disk.
+   */
+  path: string;
+  /**
+   * The HTTP headers that were sent along with this file.
+   */
+  headers: IncomingHttpHeaders;
+  /**
+   * Size of the file in bytes.
+   */
+  size: number;
+}
+```
 
 ## License
 
