@@ -249,6 +249,9 @@ export class Form extends Writable {
    * for files are not emitted when `autoFiles` is on.
    *
    * `part` emits 'error' events! Make sure you handle them.
+   *
+   * You *must* act on the part by reading it.
+   * If you want to ignore it, just call `part.resume()`.
    */
   on(event: 'part', listener: (part: PartEvent) => void): this;
   /**
@@ -284,6 +287,7 @@ export class Form extends Writable {
   on(event: 'field', listener: (name?: string, value?: string) => void): this;
   on(event: 'drain', listener: () => void): this;
   on(event: 'finish', listener: () => void): this;
+  on(event: 'resume', listener: () => void): this;
   on(event: 'pipe', listener: (src: Readable) => void): this;
   on(event: 'unpipe', listener: (src: Readable) => void): this;
   on(event: 'newListener', listener: (event: string) => void): this;

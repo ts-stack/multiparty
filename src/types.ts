@@ -130,6 +130,7 @@ export interface PartEvent extends ReadableStream {
    */
   byteCount: number;
   on(event: 'error', listener: (err: Error & { statusCode?: number }) => void): this;
+  resume(): this;
 }
 
 export interface FormFile {
