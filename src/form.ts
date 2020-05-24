@@ -120,6 +120,10 @@ export class Form extends Writable {
     });
   }
 
+  /**
+   * Parses an incoming node.js `request` containing form data. This will cause
+   * `form` to emit events based off the incoming request.
+   */
   parse(req: NodeReq, cb?: (err?: Error & { statusCode?: number }, fields?: ObjectAny, files?: ObjectAny) => void) {
     this.req = req;
     const self = this;

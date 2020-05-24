@@ -4,6 +4,13 @@ This is fork of `multiparty` from [f06cdb6](https://github.com/pillarjs/multipar
 
 Parse http requests with content-type `multipart/form-data`, also known as file uploads.
 
+## Why the fork?
+
+- It will not create a temp file for you unless you want it to.
+- Counts bytes and does math to help you figure out the `Content-Length` of each part.
+- You can easily stream uploads to s3 with [knox](https://github.com/LearnBoost/knox), for [example](https://github.com/ts-stack/multiparty/tree/master/examples).
+- Writen in TypeScript, less bugs. This code is simpler, has all deprecated functionality removed, has cleaner tests, and does not try to do anything beyond multipart stream parsing.
+
 ## Installation
 
 This is a [Node.js](https://nodejs.org/en/) module available through the
