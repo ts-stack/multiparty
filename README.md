@@ -1,6 +1,6 @@
 # multiparty
 
-This is fork of `multiparty` from [f06cdb6](https://github.com/pillarjs/multiparty/commit/f06cdb6), writen in TypeScript.
+This is fork of `multiparty` from [this state](https://github.com/pillarjs/multiparty/tree/f06cd), writen in TypeScript.
 
 Parse http requests with content-type `multipart/form-data`, also known as file uploads.
 
