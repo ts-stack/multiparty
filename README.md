@@ -2,7 +2,7 @@
 
 Parse http requests with content-type `multipart/form-data`, also known as file uploads.
 
-This is fork of `multiparty` from [this state](https://github.com/pillarjs/multiparty/tree/f06cd), writen in TypeScript.
+This is fork of `multiparty` from [this state](https://github.com/pillarjs/multiparty/tree/684b6e), writen in TypeScript.
 
 ## Installation
 
