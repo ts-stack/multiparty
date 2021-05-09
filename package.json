@@ -1,7 +1,7 @@
 {
   "name": "@ts-stack/multiparty",
   "description": "multipart/form-data parser which supports streaming, writen in TypeScript",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "author": "Костя Третяк <ktretiak.in.ua@gmail.com>",
   "license": "MIT",
   "main": "dist/index",
