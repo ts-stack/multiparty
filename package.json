@@ -11,7 +11,9 @@
     "build": "tsc"
   },
   "resolutions": {
-    "lodash": "^4.17.21"
+    "lodash": "^4.17.21",
+    "hosted-git-info": "^2.8.9",
+    "node-notifier": "^8.0.1"
   },
   "repository": "ts-stack/multiparty",
   "dependencies": {
