@@ -10,6 +10,9 @@
     "test": "jest test/",
     "build": "tsc"
   },
+  "resolutions": {
+    "lodash": "^4.17.21"
+  },
   "repository": "ts-stack/multiparty",
   "dependencies": {
     "@types/http-errors": "^1.6.3",
