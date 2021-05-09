@@ -6,7 +6,6 @@ import { EventEmitter } from 'events';
 import { IncomingHttpHeaders } from 'http';
 import { StringDecoder } from 'string_decoder';
 import createError = require('http-errors');
-const fdSlicer = require('fd-slicer');
 import uid = require('uid-safe');
 import path = require('path');
 
@@ -22,6 +21,7 @@ import {
   PartEvent,
   FormFile,
 } from './types';
+import { LimitStream } from './limit-stream';
 
 const START = 0;
 const END = 11;
@@ -99,7 +99,7 @@ export class Form extends Writable {
   protected boundaryChars: { [x: string]: boolean };
 
   constructor(options?: FormOptions) {
-    super();
+    super({ emitClose: false });
     const opts = options || {};
 
     this.autoFields = !!opts.autoFields;
@@ -129,6 +129,8 @@ export class Form extends Writable {
     const self = this;
     let called = false;
     this.waitend = true;
+
+    this.on('close', onClosed);
 
     if (cb) {
       // if the user supplies a callback, this implies autoFields and autoFiles
@@ -170,7 +172,7 @@ export class Form extends Writable {
         filesArray.push(file);
       });
       this.on('close', () => {
-        end(() => {
+        end(function() {
           cb(null, fields, files);
         });
       });
@@ -228,6 +230,10 @@ export class Form extends Writable {
     function validationError(err: Error) {
       // handle error on next tick for event listeners to attach
       process.nextTick(self.handleError.bind(self, err));
+    }
+
+    function onClosed() {
+      req.removeListener('aborted', self.boundOnReqAborted);
     }
   }
 
@@ -796,44 +802,39 @@ export class Form extends Writable {
     };
     const internalFile: OpenedFile = {
       publicFile,
-      ws: null,
+      ls: null,
+      ws: fs.createWriteStream(publicFile.path, { flags: 'wx' }),
     };
+    this.openedFiles.push(internalFile);
     this.beginFlush(); // flush to write stream
     const emitAndReleaseHold = this.holdEmitQueue(fileStream);
     fileStream.on('error', (err) => {
       this.handleError(err);
     });
-    fs.open(publicFile.path, 'wx', (err1, fd) => {
-      if (err1) return this.handleError(err1);
-      const slicer = fdSlicer.createFromFd(fd, { autoClose: true });
-
+    internalFile.ws.on('error', (err) => {
+      this.handleError(err);
+    });
+    internalFile.ws.on('open', () => {
       // end option here guarantees that no more than that amount will be written
       // or else an error will be emitted
-      internalFile.ws = slicer.createWriteStream({ end: this.maxFilesSize - this.totalFileSize });
+      internalFile.ls = new LimitStream(this.maxFilesSize - this.totalFileSize);
+      internalFile.ls.pipe(internalFile.ws);
 
-      // if an error ocurred while we were waiting for fs.open we handle that
-      // cleanup now
-      this.openedFiles.push(internalFile);
-      if (this.error) return this.cleanupOpenFiles();
-
-      let prevByteCount = 0;
-      internalFile.ws.on('error', (err2: Error & { code: string }) => {
+      internalFile.ls.on('error', (err2: Error & { code: string }) => {
         this.handleError(err2.code === 'ETOOBIG' ? createError(413, err2.message, { code: err2.code }) : err2);
       });
-      internalFile.ws.on('progress', () => {
-        publicFile.size = internalFile.ws.bytesWritten;
-        const delta = publicFile.size - prevByteCount;
-        this.totalFileSize += delta;
-        prevByteCount = publicFile.size;
+      internalFile.ls.on('progress', (totalBytes, chunkBytes) => {
+        publicFile.size = totalBytes;
+        this.totalFileSize += chunkBytes;
       });
-      slicer.on('close', () => {
+      internalFile.ws.on('close', () => {
         if (this.error) return;
         emitAndReleaseHold(() => {
           this.emit('file', fileStream.name, publicFile);
         });
         this.endFlush();
       });
-      fileStream.pipe(internalFile.ws);
+      fileStream.pipe(internalFile.ls);
     });
 
     function uploadPath(baseDir: string, filename: string) {

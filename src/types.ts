@@ -2,6 +2,7 @@ import { PassThrough } from 'stream';
 import { EventEmitter } from 'events';
 import { IncomingHttpHeaders, IncomingMessage } from 'http';
 import fs = require('fs');
+import { LimitStream } from './limit-stream';
 
 export class FormOptions {
   /**
@@ -66,6 +67,7 @@ export interface PassThroughExt extends PassThrough {
 
 export interface OpenedFile {
   publicFile: PublicFile;
+  ls: LimitStream;
   ws: fs.WriteStream;
 }
 
